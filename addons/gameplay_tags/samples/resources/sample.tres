@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="GameplayTagList" load_steps=2 format=3 uid="uid://0mvo4thkrprn"]
+
+[ext_resource type="Script" uid="uid://dddq13vsduw83" path="res://addons/gameplay_tags/scripts/resources/gameplay_tag_list.gd" id="1_ksro3"]
+
+[resource]
+script = ExtResource("1_ksro3")
+gameplay_tag_list = Array[Dictionary]([{
+"tag": &"Skill.Fireball"
+}, {
+"tag": &"Combat.Weapon.Melee"
+}, {
+"tag": &"Combat.Weapon.Ranged"
+}, {
+"tag": &"State.Debuff.Stun"
+}])
+gameplay_tag_redirects = Array[Dictionary]([{
+"new_tag": &"Combat.Weapon.Melee",
+"old_tag": &"Combat.OldAttack"
+}])
+metadata/_custom_type_script = "uid://dddq13vsduw83"

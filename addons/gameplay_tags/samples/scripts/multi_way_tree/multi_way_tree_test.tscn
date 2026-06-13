@@ -1,0 +1,16 @@
+[gd_scene load_steps=5 format=3 uid="uid://cms5873ytexxs"]
+
+[ext_resource type="Script" uid="uid://dti0efsdy7p1t" path="res://addons/gameplay_tags/samples/scripts/gameplay_tag/gameplay_tag_test.gd" id="1_14fb5"]
+[ext_resource type="Script" uid="uid://ta2umfiwu2hj" path="res://addons/gameplay_tags/samples/scripts/gameplay_tag/gameplay_tag_tree_test.gd" id="2_yvha3"]
+[ext_resource type="Script" uid="uid://duyreunis5mf7" path="res://addons/gameplay_tags/scripts/structure/f_gameplay_tag_container.gd" id="3_0mt6e"]
+
+[sub_resource type="Resource" id="Resource_0mt6e"]
+script = ExtResource("3_0mt6e")
+_saved_tag_names = Array[StringName]([&"Combat", &"Combat.Weapon", &"Combat.Weapon.Melee"])
+
+[node name="MultiWayTreeTest" type="Node"]
+script = ExtResource("1_14fb5")
+
+[node name="Node" type="Node" parent="."]
+script = ExtResource("2_yvha3")
+my_tags = SubResource("Resource_0mt6e")

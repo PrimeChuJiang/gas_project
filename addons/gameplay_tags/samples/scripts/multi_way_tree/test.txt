@@ -1,0 +1,6 @@
+test 3 a b c
+a 1 d
+b 0
+c 0
+d 1 e
+e 0
