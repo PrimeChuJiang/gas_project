@@ -3,7 +3,7 @@ extends Resource
 class_name GameplayTagsList
 
 ## 对应 UE 的 ConfigFileName：关联的外部配置文件路径
-@export var config_file_path: String = "res://config/default_gameplay_tags.cfg"
+@export var config_file_path: String = "res://addons/gameplay_tags/samples/config/default_gameplay_tags.cfg"
 
 # 字典格式为{"tag": &"Combat.Weapon", "component": "备注"} 
 @export var gameplay_tag_list : Array[Dictionary] = []

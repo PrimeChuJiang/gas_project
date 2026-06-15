@@ -2,6 +2,12 @@
 extends Node
 class_name GameplayTagsManager
 
+const LL := GameplayTagsLogger.LogLevel;
+
+# 项目设置（Project Settings）里这一项的 key 与默认值；插件注册和运行时读取共用同一份常量，避免字符串分裂
+const SETTING_CONFIG_PATH := "gameplay_tags/config/config_file_path"
+const DEFAULT_CONFIG_PATH := "res://addons/gameplay_tags/samples/config/default_gameplay_tags.cfg"
+
 # 全局注册表，键是StringName，值是FGameplayTag对象
 var _registered_tags : Dictionary = {}
 
@@ -28,7 +34,8 @@ func _ready():
 	
 # 1. 实例化我们的配置资源，并指定我们要读写的外部文本文件路径
 	_tags_data_list = GameplayTagsList.new()
-	_tags_data_list.config_file_path = "res://config/default_gameplay_tags.cfg"
+	# 从项目设置读取路径；若用户没配过（或插件还没注册），用默认值兜底
+	_tags_data_list.config_file_path = ProjectSettings.get_setting(SETTING_CONFIG_PATH, DEFAULT_CONFIG_PATH)
 	reload_tags_from_config()
 	
 	print("[GameplayTagsManager] 初始化完成。当前注册标签总数: ", _registered_tags.size());
@@ -111,27 +118,23 @@ func request_gameplay_tag(p_name : StringName, p_error_if_not_found : bool = tru
 	# 我们为未注册的非法请求返回一个崭新的、独立的临时标签
 	return FGameplayTag.new(&"")
 	
+## 对外接口：切换配置文件路径并立刻重新拉取（供项目设置变更时调用）
+func set_config_path(path : String) -> void:
+	if _tags_data_list == null:
+		_tags_data_list = GameplayTagsList.new()
+	_tags_data_list.config_file_path = path
+	reload_tags_from_config()
+
 ## 核心删除/重载逻辑：清空旧内存，重新读取最新的文件数据
 func reload_tags_from_config() -> void:
 	_tag_node_map.clear()
 	_root_nodes.clear()
 	_runtime_tag_pool.clear()
 	
-	var target_path = _tags_data_list.config_file_path if _tags_data_list else "res://config/default_gameplay_tags.cfg"
+	var target_path := _tags_data_list.config_file_path if _tags_data_list else ProjectSettings.get_setting(SETTING_CONFIG_PATH, DEFAULT_CONFIG_PATH)
 	
-	# 【核心修复】：环境拦截隔离
-	# 我们只允许在【纯编辑器状态（!OS.has_feature("editor") 或通过特定的 Hint 区分）】下才去执行强行创建和重写。
-	# 在点击 F6 运行游戏时，直接静默读取即可，绝不去反向触发硬盘的物理修改！
-	# 这能 100% 避免游戏进程在启动时，踩踏导致编辑器弹窗提示更新！
-	if Engine.is_editor_hint():
-		var dir_path = target_path.get_base_dir()
-		if not DirAccess.dir_exists_absolute(dir_path):
-			var err = DirAccess.make_dir_recursive_absolute(dir_path)
-		if not FileAccess.file_exists(target_path):
-			var file = FileAccess.open(target_path, FileAccess.WRITE)
-			if file:
-				file.store_string("[GameplayTags]\nGameplayTagList=[{\"tag\": &\"Combat.Weapon.Melee\"}, {\"tag\": &\"State.Debuff.Stun\"}]\n")
-				file.close()
+	# 编辑器内确定是否有初始化的cfg文件
+	_ensure_config_exists(target_path);
 				
 	# 确信存在后，正常数据加载（两端安全读取）
 	_tags_data_list = GameplayTagsList.new()
@@ -149,3 +152,26 @@ func reload_tags_from_config() -> void:
 		var t_name = tag_data.get("tag", &"")
 		if t_name != &"":
 			add_native_gameplay_tag(t_name)
+
+func _ensure_config_exists(path : String) -> void:
+	if not Engine.is_editor_hint(): return;
+	if FileAccess.file_exists(path): return;
+	GameplayTagsLogger.print_log(LL.INFO, "[GameplayTagManager]", "创建初始化标签");
+	var dir := path.get_base_dir();
+	if not DirAccess.dir_exists_absolute(dir):
+		DirAccess.make_dir_recursive_absolute(dir);
+	var _seed := GameplayTagsList.new();
+	_seed.config_file_path = path;
+	_seed.gameplay_tag_list = [
+		{
+		"tag": &"This.is.Tag1"
+		},
+		{
+		"tag": &"This.is.Tag2"
+		},
+		{
+		"tag": &"And.this.is.another.Tag.from.root"
+		}
+	]
+	_seed.save_to_config();
+	

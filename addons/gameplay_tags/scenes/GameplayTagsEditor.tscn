@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://b6qg4ncefr5cv" path="res://addons/gameplay_tags/scripts/widget/GameplayTagsEditor.gd" id="1_o1xx3"]
 
 [node name="GameplayTagsEditor" type="Control"]
+custom_minimum_size = Vector2(0, 200)
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -26,6 +27,11 @@ layout_mode = 2
 layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "输入标签名，格式为\"A.B.C\""
+
+[node name="TagComment" type="LineEdit" parent="VBoxContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "输入标签注释，可为空"
 
 [node name="AddButton" type="Button" parent="VBoxContainer/HBoxContainer"]
 layout_mode = 2
