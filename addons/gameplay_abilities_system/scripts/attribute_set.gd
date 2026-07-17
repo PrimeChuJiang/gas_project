@@ -38,15 +38,16 @@ func apply_base_value_change(attr_name: StringName, delta: float) -> float:
 	if not _attributes.has(attr_name):
 		return 0.0
 	var data: GASAttributeDATA = _attributes[attr_name]
+	var old_base = data.base_value
 	var new_base = pre_attribute_change(attr_name, data.base_value + delta)
 	var old_current = data.current_value
 	data.set_base_value(new_base)
 	if data.current_value != old_current:
 		attribute_changed.emit(attr_name, data.current_value, old_current)
-	return new_base - data.base_value
+	return new_base - old_base
 
 # 添加/移除修改器(带信号)
-func apply_modifier(attr_name: StringName, handle: int, op: int, magnitude: float) -> void:
+func apply_modifier(attr_name: StringName, handle: int, op: GASEnums.ModifierOp, magnitude: float) -> void:
 	if not _attributes.has(attr_name):
 		return
 	var data: GASAttributeDATA = _attributes[attr_name]
@@ -80,16 +81,6 @@ func remove_modifier(attr_name: StringName, handle: int):
 ## 外部不应直接调 data.set_base_value()，写入入口只有 apply_base_value_change() 这一个
 func pre_attribute_change(attr_name: StringName, new_value: float) -> float:
 	return new_value
-"""
-我们这里只能修正值，也就是我们只钳制BaseValue，我们不碰CurrentValue
-func pre_attribute_change(attr_name: StringName, new_value: float) -> float:
-    match attr_name:
-        &"Health":
-            return clamp(new_value, 0.0, _attributes[&"MaxHealth"].current_value)
-        &"Mana":
-            return clamp(new_value, 0.0, _attributes[&"MaxMana"].current_value)
-    return new_value
-"""
 
 ## PostGameplayEffectExecute: GE 所有 Modifier 应用完毕后的连锁反应阶段
 ##
@@ -114,5 +105,5 @@ func pre_attribute_change(attr_name: StringName, new_value: float) -> float:
 ##   ThreatGenerated   生成的仇恨值
 ##
 ## 共性：都是 GE 计算出的"临时中间值"，不持久化、不复用、每次 GE 消费后立刻归零
-func post_gameplay_effect_execute(effect_spec):
+func post_gameplay_effect_execute(effect_spec: GASEffectSpec):
 	pass

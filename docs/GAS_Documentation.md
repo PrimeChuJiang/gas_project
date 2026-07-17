@@ -58,7 +58,7 @@ ASC
 ├── ActiveGameplayEffects (FActiveGameplayEffectsContainer)
 │   └── 当前激活的所有 GameplayEffect 实例
 └── ActivatableAbilities (FGameplayAbilitySpecContainer)
-    └── 已授予的所有 GameplayAbility Spec
+	└── 已授予的所有 GameplayAbility Spec
 ```
 
 ### 3.3 复制模式 (Replication Mode)
@@ -133,13 +133,13 @@ Meta Attributes 是临时的占位属性，用于在效果间传递值。
 ```gdscript
 # 示例：基础属性集
 class GASAttributeSet extends Resource:
-    var health: float        # 生命值
-    var max_health: float    # 最大生命值
-    var mana: float          # 法力值
-    var max_mana: float      # 最大法力值
-    var attack_power: float  # 攻击力
-    var defense: float       # 防御力
-    var move_speed: float    # 移动速度
+	var health: float        # 生命值
+	var max_health: float    # 最大生命值
+	var mana: float          # 法力值
+	var max_mana: float      # 最大法力值
+	var attack_power: float  # 攻击力
+	var defense: float       # 防御力
+	var move_speed: float    # 移动速度
 ```
 
 ### 5.5 AttributeSet 设计原则
@@ -171,9 +171,9 @@ PreAttributeChange(attribute, new_value) -> clamped_value
 asc.get_gameplay_attribute_value_change_delegate(health_attr).connect(_on_health_changed)
 
 func _on_health_changed(new_value: float, old_value: float):
-    update_health_ui(new_value)
-    if new_value <= 0:
-        handle_death()
+	update_health_ui(new_value)
+	if new_value <= 0:
+		handle_death()
 ```
 
 ---
@@ -212,7 +212,7 @@ GameplayEffect 定义
 ├── Gameplay Cues (触发的表现效果)
 ├── Period (周期性执行间隔，0=非周期性)
 └── Executions (执行器)
-    └── ExecutionCalculations (自定义计算类)
+	└── ExecutionCalculations (自定义计算类)
 ```
 
 ### 6.3 Modifiers (修改器)
@@ -326,20 +326,20 @@ GE 可以配置免疫规则：当目标拥有某些 Tag 时，阻止此 GE 的�
 
 ```
 [GE 定义] 
-    → 创建 FGameplayEffectSpec (实例化)
-    → ASC.ApplyGameplayEffectSpecToSelf/Target()
-    → ASC.ApplyGE_Internal()
-    → PreAttributeChange() (钳制)
-    → ExecutionCalculation (如果配置)
-    → Modifiers 逐个应用
-    → PostGameplayEffectExecute() (连锁反应)
-    → 添加 Granted Tags
-    → 触发 GameplayCues
-    
+	→ 创建 FGameplayEffectSpec (实例化)
+	→ ASC.ApplyGameplayEffectSpecToSelf/Target()
+	→ ASC.ApplyGE_Internal()
+	→ PreAttributeChange() (钳制)
+	→ ExecutionCalculation (如果配置)
+	→ Modifiers 逐个应用
+	→ PostGameplayEffectExecute() (连锁反应)
+	→ 添加 Granted Tags
+	→ 触发 GameplayCues
+	
 [Duration/Infinite GE]
-    → 加入 ActiveGameplayEffects 容器
-    → 开始计时 → (Period 周期性执行)
-    → 到期 → 回退 CurrentValue → 移除 Granted Tags → 移除
+	→ 加入 ActiveGameplayEffects 容器
+	→ 开始计时 → (Period 周期性执行)
+	→ 到期 → 回退 CurrentValue → 移除 Granted Tags → 移除
 ```
 
 ---
@@ -360,22 +360,22 @@ GE 可以配置免疫规则：当目标拥有某些 Tag 时，阻止此 GE 的�
 
 ```gdscript
 class GameplayAbility:
-    func can_activate(ability_spec, asc) -> bool:
-        # 检查：Cost 是否够、Cooldown 是否结束、Tag 条件是否满足
-        pass
-    
-    func activate(ability_spec, asc):
-        # 1. Commit (消耗资源、启动冷却)
-        # 2. 执行能力逻辑（通过 AbilityTasks）
-        pass
-    
-    func end_ability(ability_spec, asc):
-        # 结束能力，清理资源
-        pass
-    
-    func cancel_ability(ability_spec, asc):
-        # 取消能力
-        pass
+	func can_activate(ability_spec, asc) -> bool:
+		# 检查：Cost 是否够、Cooldown 是否结束、Tag 条件是否满足
+		pass
+	
+	func activate(ability_spec, asc):
+		# 1. Commit (消耗资源、启动冷却)
+		# 2. 执行能力逻辑（通过 AbilityTasks）
+		pass
+	
+	func end_ability(ability_spec, asc):
+		# 结束能力，清理资源
+		pass
+	
+	func cancel_ability(ability_spec, asc):
+		# 取消能力
+		pass
 ```
 
 ### 7.3 实例化策略 (Instancing Policy)
@@ -425,11 +425,11 @@ asc.grant_ability(ability_class, level, source_object)
 ```gdscript
 # Activate 中的典型流程
 func activate(ability_spec, asc):
-    # Commit: 检查并应用 Cost 和 Cooldown
-    if not commit_ability(ability_spec, asc):
-        return  # Cost 不够或 Cooldown 中
-    
-    # 执行能力逻辑...
+	# Commit: 检查并应用 Cost 和 Cooldown
+	if not commit_ability(ability_spec, asc):
+		return  # Cost 不够或 Cooldown 中
+	
+	# 执行能力逻辑...
 ```
 
 ### 7.8 Ability Spec (能力规格)
@@ -492,31 +492,31 @@ AbilityTask 继承自 GameplayTask，提供：
 
 ```gdscript
 class AbilityTask extends RefCounted:
-    signal finished()
-    signal ready()
-    
-    var ability: GameplayAbility
-    var asc: AbilitySystemComponent
-    
-    func activate():
-        pass
-    
-    func end_task():
-        finished.emit()
+	signal finished()
+	signal ready()
+	
+	var ability: GameplayAbility
+	var asc: AbilitySystemComponent
+	
+	func activate():
+		pass
+	
+	func end_task():
+		finished.emit()
 ```
 
 ```gdscript
 # 使用示例：在 GA 中
 func activate(...):
-    # 播放动画并等待
-    var task = PlayAnimationTask.new(animation_player, "attack")
-    task.finished.connect(_on_animation_finished)
-    task.activate()
+	# 播放动画并等待
+	var task = PlayAnimationTask.new(animation_player, "attack")
+	task.finished.connect(_on_animation_finished)
+	task.activate()
 
 func _on_animation_finished():
-    # 动画结束，继续后续逻辑
-    apply_damage()
-    end_ability()
+	# 动画结束，继续后续逻辑
+	apply_damage()
+	end_ability()
 ```
 
 ---
@@ -558,16 +558,16 @@ GameplayCue.Status.Stun        → StunCue (播放眩晕光环)
 
 ```gdscript
 class GameplayCueManager:
-    var _cue_handlers: Dictionary = {}  # tag -> handler callback
-    
-    func handle_gameplay_cue(tag: FGameplayTag, source: Node, params: Dictionary):
-        var handler = _cue_handlers.get(tag.tag_name)
-        if handler:
-            handler.call(source, params)
-    
-    func add_gameplay_cue(tag: FGameplayTag, source: Node, params: Dictionary):
-        # 创建持续表现，记录以便后续移除
-        pass
+	var _cue_handlers: Dictionary = {}  # tag -> handler callback
+	
+	func handle_gameplay_cue(tag: FGameplayTag, source: Node, params: Dictionary):
+		var handler = _cue_handlers.get(tag.tag_name)
+		if handler:
+			handler.call(source, params)
+	
+	func add_gameplay_cue(tag: FGameplayTag, source: Node, params: Dictionary):
+		# 创建持续表现，记录以便后续移除
+		pass
 ```
 
 ---
@@ -617,15 +617,15 @@ GAS 支持客户端预测以下内容：
 ```gdscript
 # 鼠标点击目标选择
 func get_target_data_from_mouse():
-    var space_state = get_world_3d().direct_space_state
-    var query = PhysicsRayQueryParameters3D.create(...)
-    var result = space_state.intersect_ray(query)
-    return GameplayAbilityTargetData.from_hit_result(result)
+	var space_state = get_world_3d().direct_space_state
+	var query = PhysicsRayQueryParameters3D.create(...)
+	var result = space_state.intersect_ray(query)
+	return GameplayAbilityTargetData.from_hit_result(result)
 
 # AOE 范围目标选择
 func get_target_data_in_radius(center, radius):
-    var targets = area.overlapping_bodies
-    return GameplayAbilityTargetData.from_targets(targets)
+	var targets = area.overlapping_bodies
+	return GameplayAbilityTargetData.from_targets(targets)
 ```
 
 ---
@@ -646,8 +646,8 @@ func get_target_data_in_radius(center, radius):
    
 3. GA.Activate()
    → 1) CommitAbility:
-         → 应用 Cost GE: -30 法力
-         → 应用 Cooldown GE: 添加 "Ability.Warrior.FireStrike.Cooldown" Tag (8秒)
+		 → 应用 Cost GE: -30 法力
+		 → 应用 Cooldown GE: 添加 "Ability.Warrior.FireStrike.Cooldown" Tag (8秒)
    → 2) WaitTargetData Task: 等待玩家选定目标
    
 4. 玩家选中目标
@@ -670,8 +670,8 @@ func get_target_data_in_radius(center, radius):
    → ExecutionCalculation: 实际伤害 = (攻击力 * 1.5 - 防御力 * 0.7) * (暴击? 2: 1)
    → Modifiers 应用
    → PostGameplayEffectExecute:
-        → 先扣护盾 Shield，再扣 Health
-        → Health <= 0? → 触发死亡流程
+		→ 先扣护盾 Shield，再扣 Health
+		→ Health <= 0? → 触发死亡流程
 
 9. 激活 GameplayCue：
    → GE 中配置的 GameplayCue.Weapon.FireStrike.Impact 触发

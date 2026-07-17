@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="GASGameplayEffect" format=3 uid="uid://bdoegc2q4bd0r"]
+
+[ext_resource type="Script" uid="uid://defg8fw8hdubq" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_modifier.gd" id="1_uj5ol"]
+[ext_resource type="Script" uid="uid://bmi3sw3w3ymx8" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect.gd" id="2_b3hyf"]
+
+[sub_resource type="Resource" id="Resource_t40rp"]
+script = ExtResource("1_uj5ol")
+attr_name = &"Health"
+magnitude = -10.0
+metadata/_custom_type_script = "uid://defg8fw8hdubq"
+
+[resource]
+script = ExtResource("2_b3hyf")
+duration_policy = 1
+duration = 2.1
+period = 0.5
+modifiers = Array[ExtResource("1_uj5ol")]([SubResource("Resource_t40rp")])
+comment = "每 0.5 秒扣 10 血，持续 2 秒。期间触发 4 次周期（第 0.5、1.0、1.5、2.0 秒），共扣 40 血"
+metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="GASGameplayEffect" format=3 uid="uid://k3p48spy3bm6"]
+
+[ext_resource type="Script" uid="uid://defg8fw8hdubq" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_modifier.gd" id="1_h5bbr"]
+[ext_resource type="Script" uid="uid://bmi3sw3w3ymx8" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect.gd" id="2_6i4dd"]
+
+[sub_resource type="Resource" id="Resource_t0wfv"]
+script = ExtResource("1_h5bbr")
+attr_name = &"Attack"
+magnitude = 20.0
+metadata/_custom_type_script = "uid://defg8fw8hdubq"
+
+[resource]
+script = ExtResource("2_6i4dd")
+duration_policy = 1
+duration = 3.0
+modifiers = Array[ExtResource("1_h5bbr")]([SubResource("Resource_t0wfv")])
+metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"

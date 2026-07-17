@@ -2,7 +2,10 @@ class_name FGameplayTagContainer
 extends Resource
 
 ## 隐藏变量：专门给 Godot 引擎序列化保存字符串名字。场景保存时，会自动写入 .tscn
-@export var _saved_tag_names: Array[StringName] = []
+@export var _saved_tag_names: Array[StringName] = []:
+	set(v):
+		_saved_tag_names = v
+		_restore_tags_from_saved_names()
 
 # 使用字典作为底层，键为标签对象，值为 bool（利用哈希表实现 O(1) 的增删改查）
 var _tags: Dictionary = {}
@@ -15,7 +18,7 @@ func _restore_tags_from_saved_names() -> void:
 		return
 	
 	for tag_name in _saved_tag_names:
-		var runtime_tag = GameplayTags.request_tag(tag_name, false)
+		var runtime_tag = GameplayTags.request_gameplay_tag(tag_name, false)
 		if runtime_tag.is_valid():
 			_tags[runtime_tag] = true
 
@@ -24,15 +27,15 @@ func add_tag(tag: FGameplayTag) -> void:
 	if tag and tag.is_valid():
 		if not _tags.has(tag):
 			_tags[tag] = true
-			if not _saved_tag_names.has(tag.tag_name):
-				_saved_tag_names.append(tag.tag_name)
+			if not _saved_tag_names.has(tag.get_tag_name()):
+				_saved_tag_names.append(tag.get_tag_name())
 			emit_changed() # 触发脏标记，通知 Godot 场景需要保存
 
 ## 核心接口：删除
 func remove_tag(tag: FGameplayTag) -> void:
 	if tag and _tags.has(tag):
 		_tags.erase(tag)
-		_saved_tag_names.erase(tag.tag_name)
+		_saved_tag_names.erase(tag.get_tag_name())
 		emit_changed()
 
 ## 原有的层级匹配检索保持不变

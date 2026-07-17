@@ -1,0 +1,17 @@
+class_name GASEnums
+extends RefCounted
+
+# 持续时间决策
+enum DurationPolicy{
+	INSTANT,  # 立即执行一次
+	DURATION, # 持续一段时间
+	INFINITE  # 永久
+}
+
+# 修改器选项
+enum ModifierOp{
+	ADD,
+	MULTIPLY,
+	DIVIDE,
+	OVERRIDE
+}

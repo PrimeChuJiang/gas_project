@@ -1,0 +1,31 @@
+[gd_scene format=3 uid="uid://cbqphno8c1pkg"]
+
+[ext_resource type="Script" uid="uid://c40q7msjow4bn" path="res://addons/gameplay_abilities_system/test/test_gameplay_effect.gd" id="1_cttfp"]
+[ext_resource type="Script" uid="uid://ivgkxfsymie0" path="res://addons/gameplay_abilities_system/scripts/ability_system_component.gd" id="1_xpkb0"]
+
+[node name="TestScene" type="Node2D" unique_id=2097542060]
+script = ExtResource("1_cttfp")
+
+[node name="ASC" type="Node" parent="." unique_id=345522062]
+script = ExtResource("1_xpkb0")
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=811854151]
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CanvasLayer" unique_id=1249261018]
+anchors_preset = -1
+anchor_left = 0.5
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -50.0
+offset_right = 50.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="HealthLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=2081026051]
+layout_mode = 2
+
+[node name="AttackLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=1876325470]
+layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=1143572196]
+layout_mode = 2

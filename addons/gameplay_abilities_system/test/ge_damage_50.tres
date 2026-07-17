@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="GASGameplayEffect" format=3 uid="uid://cck45wx15w8lx"]
+
+[ext_resource type="Script" uid="uid://duyreunis5mf7" path="res://addons/gameplay_tags/scripts/structure/f_gameplay_tag_container.gd" id="1_5hvff"]
+[ext_resource type="Script" uid="uid://bmi3sw3w3ymx8" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect.gd" id="1_5ovmi"]
+[ext_resource type="Script" uid="uid://defg8fw8hdubq" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_modifier.gd" id="2_d0diu"]
+
+[sub_resource type="Resource" id="Resource_gm8y3"]
+script = ExtResource("1_5hvff")
+
+[sub_resource type="Resource" id="Resource_n8q72"]
+script = ExtResource("1_5hvff")
+
+[sub_resource type="Resource" id="Resource_cttfp"]
+script = ExtResource("2_d0diu")
+attr_name = &"Health"
+magnitude = -50.0
+metadata/_custom_type_script = "uid://defg8fw8hdubq"
+
+[resource]
+script = ExtResource("1_5ovmi")
+modifiers = Array[ExtResource("2_d0diu")]([SubResource("Resource_cttfp")])
+asset_tags = SubResource("Resource_gm8y3")
+gameplay_cue_tags = SubResource("Resource_n8q72")
+metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"
