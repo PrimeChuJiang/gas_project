@@ -9,10 +9,10 @@ signal attribute_changed(attr_name: StringName, new_value: float, old_value: flo
 # 运行时实际工作的属性映射表，结构为{attribute_name(StringName) : data(AttributeData)}
 """
 _attributes = {
-    &"Health":    <GASAttributeDATA>{ base_value: 500, _modifiers: [...], _dirty: bool, _cached_value: 500 },
-    &"MaxHealth": <GASAttributeDATA>{ base_value: 500, _modifiers: [...], _dirty: bool, _cached_value: 500 },
-    &"Attack":    <GASAttributeDATA>{ base_value: 100, _modifiers: [...], _dirty: bool, _cached_value: 100 },
-    &"Mana":      <GASAttributeDATA>{ base_value: 300, _modifiers: [...], _dirty: bool, _cached_value: 300 },
+	&"Health":    <GASAttributeDATA>{ base_value: 500, _modifiers: [...], _dirty: bool, _cached_value: 500 },
+	&"MaxHealth": <GASAttributeDATA>{ base_value: 500, _modifiers: [...], _dirty: bool, _cached_value: 500 },
+	&"Attack":    <GASAttributeDATA>{ base_value: 100, _modifiers: [...], _dirty: bool, _cached_value: 100 },
+	&"Mana":      <GASAttributeDATA>{ base_value: 300, _modifiers: [...], _dirty: bool, _cached_value: 300 },
 }
 """
 var _attributes: Dictionary = {}

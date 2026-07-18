@@ -6,20 +6,32 @@ var ge_buff: GASGameplayEffect
 var ge_dot: GASGameplayEffect
 var ge_big_damage: GASGameplayEffect
 var ge_stun: GASGameplayEffect
+var ge_storm_shield: GASGameplayEffect
+
+var ga_fire_bolt: GAFireBoltAbility
+var ga_instance: GAInstanceTest
+var ga_multi_task: GAMultiTaskTest
 
 ## ASC 和属性集引用
 var asc: GASAbilitySystemComponent
 var attr_set: TestAttributeSet
 
+var storm_ge_list_handle: Array[int] = []
+var old_handle: int
+
+var _ui_tags: Array[FGameplayTag] = []
+
 @onready var health_label = $CanvasLayer/VBoxContainer/HealthLabel
 @onready var attack_label = $CanvasLayer/VBoxContainer/AttackLabel
 @onready var status_label = $CanvasLayer/VBoxContainer/StatusLabel
+@onready var tag_label = $CanvasLayer/VBoxContainer/TagLabel
 
 func _ready():
 	#test_instant_damage_ge()
 	#await test_duration_buff_ge()
 	_setup_character()
 	_load_ge_resources()
+	_create_abilities()
 	_connect_signals()
 	_refresh_ui()
 
@@ -125,6 +137,7 @@ func _setup_character() -> void:
 		&"Health": 500.0,
 		&"MaxHealth": 500.0,
 		&"Attack": 100.0,
+		&"Mana": 1000.0
 	}
 	attr_set.initialize_attributes(asc)
 	asc.add_attribute_set(attr_set)
@@ -135,12 +148,52 @@ func _load_ge_resources() -> void:
 	ge_dot = load("res://addons/gameplay_abilities_system/test/ge_dot_poison.tres")
 	ge_big_damage = load("res://addons/gameplay_abilities_system/test/ge_damage_600.tres")
 	ge_stun = load("res://addons/gameplay_abilities_system/test/ge_stun.tres")
+	ge_storm_shield = load("res://addons/gameplay_abilities_system/test/ge_storm_shield.tres")
+
+func _create_abilities() -> void:
+	var cooldown_ge = GASGameplayEffect.new()
+	cooldown_ge.duration_policy = GASEnums.DurationPolicy.DURATION
+	cooldown_ge.duration = 3.0
+	var cd_tags = FGameplayTagContainer.new()
+	cd_tags.add_tag(GameplayTags.request_gameplay_tag(&"Ability.Fire.Cooldown"))
+	cooldown_ge.granted_tag = cd_tags
+	
+	ga_fire_bolt = GAFireBoltAbility.new()
+	ga_fire_bolt.damage_ge = ge_damage
+	ga_fire_bolt.cooldown_ge = cooldown_ge
+	
+	var ge_cost_mana = GASGameplayEffect.new()
+	ge_cost_mana.duration_policy = GASEnums.DurationPolicy.INSTANT
+	var mod = GEModifier.new()
+	mod.attr_name = &"Mana"
+	mod.op = GASEnums.ModifierOp.ADD
+	mod.magnitude = -100
+	ge_cost_mana.modifiers.append(mod)
+	ga_fire_bolt.cost_ge = ge_cost_mana
+	
+	asc.give_ability(ga_fire_bolt)
+	
+	ga_instance = GAInstanceTest.new()
+	asc.give_ability(ga_instance)
+	
+	ga_multi_task = GAMultiTaskTest.new()
+	asc.give_ability(ga_multi_task)
 
 func _connect_signals() -> void:
 	attr_set.attribute_changed.connect(_on_attribute_changed)
 	asc.gameplay_tag_changed.connect(_on_tag_changed)
 
 func _on_tag_changed(tag: FGameplayTag, added: bool):
+	# —— TagsLabel 刷新 ——
+	if added:
+		_ui_tags.append(tag)
+	else:
+		_ui_tags.erase(tag)
+	var names: PackedStringArray = []
+	for t in _ui_tags:
+		names.append(t.get_tag_name())
+	tag_label.text = "Tags: " + ", ".join(names)
+	 # —— 原有的眩晕状态栏逻辑保持不动 ——
 	var stun_tag = GameplayTags.request_gameplay_tag(&"State.Debuff.Stun")
 	if tag == stun_tag:
 		if added:
@@ -149,6 +202,7 @@ func _on_tag_changed(tag: FGameplayTag, added: bool):
 		else:
 			status_label.text = "状态: 无"
 			assert(true, "眩晕标签已移除")  # 验证通过
+	
 
 func _refresh_ui():
 	health_label.text = "生命：%d" % attr_set.get_attribute_value(&"Health")
@@ -160,7 +214,6 @@ func _on_attribute_changed(attr_name: StringName, new_value: float, old_value: f
 func _input(event: InputEvent):
 	if not event.is_pressed():
 		return
-
 	match event.as_text():
 		"1":
 			asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_damage))
@@ -177,3 +230,32 @@ func _input(event: InputEvent):
 		"5":
 			asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_stun))
 			status_label.text = "状态: 眩晕 (1.5秒)"
+		"6":
+			if asc.try_activate_ability(ga_fire_bolt):
+				status_label.text = "状态: 蓄力火球(1.5秒后 -50)"
+			else:
+				asc.cancel_ability(ga_fire_bolt)
+		"7":
+			if  asc.try_activate_ability(ga_instance):
+				status_label.text = "测试: 瞬时GA"
+				GameLogger.warn("TestScene", "asc._active_abilities.size = " + str(asc._active_abilities.size()))
+		"8":
+			if asc.try_activate_ability(ga_multi_task):
+				status_label.text = "测试: 多task并存"
+		"9":
+			asc.cancel_ability(ga_multi_task)
+			GameLogger.warn("TestScene", "asc._active_abilities.size = " + str(asc._active_abilities.size()))
+		"0":
+			var handle = asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_storm_shield))
+			storm_ge_list_handle.append(handle)
+			old_handle = handle
+			GameLogger.info("TestScene", "get storm_shield handle: " + str(handle))
+		"Minus":
+			if storm_ge_list_handle.is_empty(): return
+			var handle = storm_ge_list_handle[storm_ge_list_handle.size()-1]
+			storm_ge_list_handle.remove_at(storm_ge_list_handle.size()-1)
+			asc.remove_active_effect(handle)
+			GameLogger.info("TestScene", "remove handle: " + str(handle))
+		"Equal":
+			var res = asc.remove_active_effect(old_handle)
+			GameLogger.info("TestScene", "remove old_handle: " + str(old_handle) + " answer: " + str(res))

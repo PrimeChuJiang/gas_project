@@ -29,6 +29,3 @@ layout_mode = 2
 
 [node name="StatusLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=1143572196]
 layout_mode = 2
-
-[node name="TagLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=1514353870]
-layout_mode = 2

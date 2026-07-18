@@ -24,4 +24,4 @@ GameplayTags="*uid://cu1tica0d6ofq"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/gameplay_abilities_system/plugin.cfg", "res://addons/gameplay_tags/plugin.cfg")
+enabled=PackedStringArray("res://addons/gameplay_abilities_system/plugin.cfg", "res://addons/gameplay_tags/plugin.cfg", "res://addons/logger/plugin.cfg")

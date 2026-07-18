@@ -7,7 +7,7 @@ extends Resource
 		_saved_tag_names = v
 		_restore_tags_from_saved_names()
 
-# 使用字典作为底层，键为标签对象，值为 bool（利用哈希表实现 O(1) 的增删改查）
+# 使用字典作为底层，键为FGameplayTag对象，值为 bool（利用哈希表实现 O(1) 的增删改查）
 var _tags: Dictionary = {}
 
 ## 内部桥接方法：从保存的 StringName 还原为高性能全局唯一指针对象
