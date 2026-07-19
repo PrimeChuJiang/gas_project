@@ -24,6 +24,9 @@ grow_vertical = 2
 [node name="HealthLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=2081026051]
 layout_mode = 2
 
+[node name="MaxHealthLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=576013526]
+layout_mode = 2
+
 [node name="AttackLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=1876325470]
 layout_mode = 2
 

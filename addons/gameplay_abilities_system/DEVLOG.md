@@ -277,4 +277,71 @@ UE 对照：冷却时长用 ScalableFloat/MMC（ModifierMagnitudeCalculation）�
 
 ---
 
-*本轮结束时代码状态：CDR 折算 + 虚函数缝 + 冷却票根落地，手动回归通过（3s → 2.1s → 脱戒指恢复）。*
+## 8. 复盘：属性上限联动（2026-07-19 晚完成）
+
+### 落地的东西
+
+- pre 钳制上限从 MaxHealth/MaxMana 的 **base_value 改为 current_value**——"+200 最大生命"装备（modifier 改 current）能真正抬高治疗上限；
+- **上限缩水压顶**：TestAttributeSet 监听自己的 `attribute_changed`，Max 属性缩水时经
+  `attribute_map`（Max→被压属性的映射表）算出 delta，**走 `apply_base_value_change` 漏斗**回调——
+  信号、pre 钳制自动跟上（第一版直接 `set_base_value` 绕漏斗，UI 会静默失联，已纠正）；
+- 新增 `attribute_initialized` 信号：初始值宣告与变化信号分离（不编造 old_value=0，飘字系统不会开局 "+500"）。
+  **契约：监听者必须在 initialize_attributes 之前连接**；迟到者用 get_attribute_value() 拉取——初始状态用拉，后续变化用推；
+- `initial_attributes` / `_attributes` 加 typed Dictionary 标注，配置字典改名与运行时字典区分（定义层→运行时层，GE→Spec 同纹理）；
+- 重复 initialize 用 `_initialized` 守卫 + 报错（不静默吞）；
+- 测试场景：Q/W/E 新键位，新增 heal_50 / add_max_health GE 与 MaxHealth 显示。
+
+### 这轮踩的坑（都值得温故）
+
+1. **抽函数抽丢了映射**：把两个 match 分支合并成 `_shrink_to_max(attr_name,...)` 时，
+   "MaxHealth→Health" 的映射被蒸发，函数拿 Max 自己既当尺子又当布——条件恒 false，功能静默死亡。
+   教训：**重构完必须重跑刚建好的测试**；"一个变量一个含义"。
+2. **双负号 `a - - b`**：藏在 Mana 分支，被 pre 钳制掩护得测试全绿。教训：漏斗兜底是保险不是许可；日志要打中间值（delta）。
+3. **"代码一样所以免验"不成立**：双负号恰好只在"看起来一样"的副本里。
+   正确动作不是辩论而是重构——DRY 让对称性从"信念"变成"结构"，Health 的测试才真正覆盖 Mana。
+4. delta 公式：压顶修正量 = 新上限 − 被压属性 current（不是 Max 自己的变化量）；带 modifier 的 Health 也能正确压顶。
+
+### 遗留（明天热身清掉）
+
+- `_on_attribute_changed` 的 match 臂 `&"MaxHealth", &"MaxMana"` 与 attribute_map 的键是同一份信息两处维护——
+  改为 `if attribute_map.has(attr_name)` 让 map 当唯一事实源；
+- `attribute_map` → `const _attribute_map`（内部 + 不可变）；
+- `ge_add_max_mana.tres` 冒烟 Mana 接线（已提三次！）；
+- 全量回归重跑一遍（含 E 键 CDR 2.1s）确认无回归。
+
+---
+
+## 9. 明天的课：眩晕打断进行中技能（push 式打断）
+
+### 问题本质
+
+`_check_block` 是**门禁（pull）**：只在激活那一刻查一次。火球蓄力中眩晕落下——门禁早查完了，
+火球照样打出伤害。**先复现这个盲区**（蓄力中按 "3" 上晕），看到 bug 活着再动手。
+修复换方向：不让技能轮询"我还能继续吗"，而是**事件找上技能（push）**——
+眩晕 tag 出现的瞬间，扫一遍进行中的技能，该断的断。基建全是现成的：
+`_tag_counts` 的 0→1 跳变沿 = "出现的瞬间"，`cancel_ability` = "断"。UE 对照：监听 Stun tag delegate → CancelAbilities。
+
+### 实现步骤
+
+1. `GASGameplayAbility` 加 `@export var cancel_with_tags: FGameplayTagContainer`（默认 new()，对齐其他字段防空引用）；
+2. ASC `_add_owned_tag` 的 **0→1 分支里**（只在这个分支）扫 `_active_abilities`，命中 cancel_with_tags 的 cancel 掉；
+3. 层级匹配方向：上 `State.Debuff.Stun`、技能声明 `State.Debuff` 也该断——matches_tag 谁调谁，和 has_tag 对齐，用具体例子推；
+4. FireBolt 配 `State.Debuff.Stun`。
+
+### 必想的三个坑
+
+- **边遍历边删**：cancel 会动 `_active_abilities`——遍历 duplicate() 副本（想想为什么这里副本比倒序稳）；
+- **重入推演**：cancel → end_ability → 信号回调若又动 tag，`_add_owned_tag` 重入——纸上推一遍为什么不死循环；
+- **push/pull 是搭档**：打断管"屋里的"，门禁管"进门的"——检查 FireBolt 的 block 配置里有没有 Stun，缺一边都是洞。
+
+### 验证清单
+
+1. 蓄力中上晕 → task 取消、`ability_ended(true)`、**伤害没落地**；
+2. 晕中叠晕（1→2）→ 不触发第二次扫描、无重复 cancel；
+3. 晕到期（1→0）→ 恢复可施放；
+4. 没配 cancel_with_tags 的技能（multi_task）不受影响；
+5. 晕中按火球 → 门禁拒之门外（pull 侧健在）。
+
+---
+
+*本轮结束时代码状态：CDR 折算 + 冷却票根 + 属性上限联动落地；MaxHealth 链路验证通过，Mana 冒烟与四条小遗留挂在第 8 节。*

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="GASGameplayEffect" format=3 uid="uid://cmskkw6wjn8ix"]
+
+[ext_resource type="Script" uid="uid://defg8fw8hdubq" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_modifier.gd" id="1_b4ob3"]
+[ext_resource type="Script" uid="uid://bmi3sw3w3ymx8" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect.gd" id="2_ut472"]
+
+[sub_resource type="Resource" id="Resource_dldn8"]
+script = ExtResource("1_b4ob3")
+attr_name = &"Health"
+magnitude = 50.0
+metadata/_custom_type_script = "uid://defg8fw8hdubq"
+
+[resource]
+script = ExtResource("2_ut472")
+modifiers = Array[ExtResource("1_b4ob3")]([SubResource("Resource_dldn8")])
+metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"

@@ -1,10 +1,13 @@
 class_name GASAttributeSet
 extends Resource
 
-signal attribute_changed(attr_name: StringName, new_value: float, old_value: float)
 
-# 编辑器内静态配置属性，结构为{attribute_name(StringName) : data(AttributeData)}
-@export var attributes : Dictionary = {}
+signal attribute_changed(attr_name: StringName, new_value: float, old_value: float)
+# 仅在 initialize_attributes 时发射;需在初始化前连接,迟到的监听者请改用 get_attribute_value() 拉取
+signal attribute_initialized(attr_name: StringName, value: float)
+
+# 编辑器内静态配置属性，结构为{attribute_name(StringName) : data(float)}
+@export var initial_attributes : Dictionary[StringName, float] = {}
 
 # 运行时实际工作的属性映射表，结构为{attribute_name(StringName) : data(AttributeData)}
 """
@@ -15,17 +18,18 @@ _attributes = {
 	&"Mana":      <GASAttributeDATA>{ base_value: 300, _modifiers: [...], _dirty: bool, _cached_value: 300 },
 }
 """
-var _attributes: Dictionary = {}
+var _attributes: Dictionary[StringName, GASAttributeDATA] = {}
 # 宿主ASC
 var asc : GASAbilitySystemComponent = null 
 
 # 初始化运行数据
 func initialize_attributes(owner_asc: GASAbilitySystemComponent):
 	self.asc = owner_asc
-	for attr_name in attributes.keys():
+	for attr_name in initial_attributes.keys():
 		var data = GASAttributeDATA.new()
-		data.base_value = attributes[attr_name]
+		data.base_value = initial_attributes[attr_name]
 		_attributes[attr_name] = data
+		attribute_initialized.emit(attr_name, initial_attributes[attr_name])
 
 # 获取最终计算值
 func get_attribute_value(attr_name: StringName) -> float:

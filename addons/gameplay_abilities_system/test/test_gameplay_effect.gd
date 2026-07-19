@@ -8,6 +8,8 @@ var ge_big_damage: GASGameplayEffect
 var ge_stun: GASGameplayEffect
 var ge_storm_shield: GASGameplayEffect
 var ge_swift_ring: GASGameplayEffect
+var ge_heal_50: GASGameplayEffect
+var ge_add_max_health: GASGameplayEffect
 
 var ga_fire_bolt: GAFireBoltAbility
 var ga_instance: GAInstanceTest
@@ -24,6 +26,7 @@ var old_handle: int
 var _ui_tags: Array[FGameplayTag] = []
 
 @onready var health_label = $CanvasLayer/VBoxContainer/HealthLabel
+@onready var max_health_label = $CanvasLayer/VBoxContainer/MaxHealthLabel
 @onready var attack_label = $CanvasLayer/VBoxContainer/AttackLabel
 @onready var status_label = $CanvasLayer/VBoxContainer/StatusLabel
 @onready var tag_label = $CanvasLayer/VBoxContainer/TagLabel
@@ -47,10 +50,13 @@ func test_instant_damage_ge():
 	character.add_child(asc)
 	
 	var attr_set = TestAttributeSet.new()
-	attr_set.attributes = {
+	attr_set.initial_attributes = {
 		&"Health": 500.0,
 		&"MaxHealth": 500.0,
 		&"Attack": 100.0,
+		&"MaxMana": 1000.0,
+		&"Mana": 1000.0,
+		&"CooldownReduction": 0.0
 	}
 	attr_set.initialize_attributes(asc)
 	asc.add_attribute_set(attr_set)
@@ -88,7 +94,7 @@ func test_duration_buff_ge():
 	character.add_child(asc)
 
 	var attr_set = TestAttributeSet.new()
-	attr_set.attributes = {
+	attr_set.initial_attributes = {
 		&"Attack": 100.0
 	}
 	attr_set.initialize_attributes(asc)
@@ -135,7 +141,7 @@ func _setup_character() -> void:
 	
 	# 配置并注册属性集
 	attr_set = TestAttributeSet.new()
-	attr_set.attributes = {
+	attr_set.initial_attributes = {
 		&"Health": 500.0,
 		&"MaxHealth": 500.0,
 		&"Attack": 100.0,
@@ -154,6 +160,8 @@ func _load_ge_resources() -> void:
 	ge_stun = load("res://addons/gameplay_abilities_system/test/ge_stun.tres")
 	ge_storm_shield = load("res://addons/gameplay_abilities_system/test/ge_storm_shield.tres")
 	ge_swift_ring = load("res://addons/gameplay_abilities_system/test/ge_swift_ring.tres")
+	ge_heal_50 = load("res://addons/gameplay_abilities_system/test/ge_heal_50.tres")
+	ge_add_max_health = load("res://addons/gameplay_abilities_system/test/ge_add_max_health.tres")
 
 func _create_abilities() -> void:
 	var cooldown_ge = GASGameplayEffect.new()
@@ -212,6 +220,7 @@ func _on_tag_changed(tag: FGameplayTag, added: bool):
 func _refresh_ui():
 	health_label.text = "生命：%d" % attr_set.get_attribute_value(&"Health")
 	attack_label.text = "攻击：%d" % attr_set.get_attribute_value(&"Attack")
+	max_health_label.text = "最大生命值：%d" % attr_set.get_attribute_value(&"MaxHealth")
 
 func _on_attribute_changed(attr_name: StringName, new_value: float, old_value: float):
 	_refresh_ui()
@@ -219,13 +228,14 @@ func _on_attribute_changed(attr_name: StringName, new_value: float, old_value: f
 func _input(event: InputEvent):
 	if not event.is_pressed():
 		return
+	GameLogger.debug("TestScene", event.as_text())
 	match event.as_text():
 		"1":
 			asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_damage))
 			status_label.text = "状态: 受到伤害 -50"
 		"2":
-			asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_buff))
-			status_label.text = "状态: 攻击力 +20 (持续) "
+			asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_heal_50))
+			status_label.text = "状态: 补充血量 +50 "
 		"3":
 			asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_dot))
 			status_label.text = "状态: 中毒 (每0.5秒 -10)"
@@ -251,10 +261,10 @@ func _input(event: InputEvent):
 			asc.cancel_ability(ga_multi_task)
 			GameLogger.warn("TestScene", "asc._active_abilities.size = " + str(asc._active_abilities.size()))
 		"0":
-			var handle = asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_swift_ring))
+			var handle = asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_storm_shield))
 			test_ge_handles.append(handle)
 			old_handle = handle
-			GameLogger.info("TestScene", "get swift_ring handle: " + str(handle))
+			GameLogger.info("TestScene", "get ge handle: " + str(handle))
 		"Minus":
 			if test_ge_handles.is_empty(): return
 			var handle = test_ge_handles[test_ge_handles.size()-1]
@@ -264,3 +274,16 @@ func _input(event: InputEvent):
 		"Equal":
 			var res = asc.remove_active_effect(old_handle)
 			GameLogger.info("TestScene", "remove old_handle: " + str(old_handle) + " answer: " + str(res))
+		"Q":
+			asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_buff))
+			status_label.text = "状态: 攻击力 +20 "
+		"W":
+			var handle = asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_add_max_health))
+			test_ge_handles.append(handle)
+			old_handle = handle
+			GameLogger.info("TestScene", "get ge handle: " + str(handle))
+		"E":
+			var handle = asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_swift_ring))
+			test_ge_handles.append(handle)
+			old_handle = handle
+			GameLogger.info("TestScene", "get ge handle: " + str(handle))
