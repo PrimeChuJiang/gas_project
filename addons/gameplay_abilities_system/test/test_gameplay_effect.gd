@@ -7,16 +7,18 @@ var ge_dot: GASGameplayEffect
 var ge_big_damage: GASGameplayEffect
 var ge_stun: GASGameplayEffect
 var ge_storm_shield: GASGameplayEffect
+var ge_swift_ring: GASGameplayEffect
 
 var ga_fire_bolt: GAFireBoltAbility
 var ga_instance: GAInstanceTest
 var ga_multi_task: GAMultiTaskTest
 
+
 ## ASC 和属性集引用
 var asc: GASAbilitySystemComponent
 var attr_set: TestAttributeSet
 
-var storm_ge_list_handle: Array[int] = []
+var test_ge_handles: Array[int] = []
 var old_handle: int
 
 var _ui_tags: Array[FGameplayTag] = []
@@ -48,7 +50,7 @@ func test_instant_damage_ge():
 	attr_set.attributes = {
 		&"Health": 500.0,
 		&"MaxHealth": 500.0,
-		&"Attack": 100.0
+		&"Attack": 100.0,
 	}
 	attr_set.initialize_attributes(asc)
 	asc.add_attribute_set(attr_set)
@@ -137,7 +139,9 @@ func _setup_character() -> void:
 		&"Health": 500.0,
 		&"MaxHealth": 500.0,
 		&"Attack": 100.0,
-		&"Mana": 1000.0
+		&"Mana": 1000.0,
+		&"MaxMana": 1000.0,
+		&"CooldownReduction": 0.0,
 	}
 	attr_set.initialize_attributes(asc)
 	asc.add_attribute_set(attr_set)
@@ -149,6 +153,7 @@ func _load_ge_resources() -> void:
 	ge_big_damage = load("res://addons/gameplay_abilities_system/test/ge_damage_600.tres")
 	ge_stun = load("res://addons/gameplay_abilities_system/test/ge_stun.tres")
 	ge_storm_shield = load("res://addons/gameplay_abilities_system/test/ge_storm_shield.tres")
+	ge_swift_ring = load("res://addons/gameplay_abilities_system/test/ge_swift_ring.tres")
 
 func _create_abilities() -> void:
 	var cooldown_ge = GASGameplayEffect.new()
@@ -246,14 +251,14 @@ func _input(event: InputEvent):
 			asc.cancel_ability(ga_multi_task)
 			GameLogger.warn("TestScene", "asc._active_abilities.size = " + str(asc._active_abilities.size()))
 		"0":
-			var handle = asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_storm_shield))
-			storm_ge_list_handle.append(handle)
+			var handle = asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_swift_ring))
+			test_ge_handles.append(handle)
 			old_handle = handle
-			GameLogger.info("TestScene", "get storm_shield handle: " + str(handle))
+			GameLogger.info("TestScene", "get swift_ring handle: " + str(handle))
 		"Minus":
-			if storm_ge_list_handle.is_empty(): return
-			var handle = storm_ge_list_handle[storm_ge_list_handle.size()-1]
-			storm_ge_list_handle.remove_at(storm_ge_list_handle.size()-1)
+			if test_ge_handles.is_empty(): return
+			var handle = test_ge_handles[test_ge_handles.size()-1]
+			test_ge_handles.remove_at(test_ge_handles.size()-1)
 			asc.remove_active_effect(handle)
 			GameLogger.info("TestScene", "remove handle: " + str(handle))
 		"Equal":

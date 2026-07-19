@@ -21,9 +21,12 @@ var period: float = 0.0
 # 元素为Dictionary:{attr_name: StringName, op: ModifierOp, magnitude: float}
 var modifiers: Array[GEModifier] = [] 
 
-func _init(effect: GASGameplayEffect):
+func _init(effect: GASGameplayEffect, spec_context: GASEffectContext = null, spec_source_asc: GASAbilitySystemComponent = null, spec_target_asc: GASAbilitySystemComponent = null):
 	effect_def = effect
 	duration = effect.duration
 	period = effect.period
+	context = spec_context
+	source_asc = spec_source_asc
+	target_asc = spec_target_asc
 	for mod in effect.modifiers:
 		modifiers.append(mod.duplicate())

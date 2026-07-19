@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="GASGameplayEffect" format=3 uid="uid://dq3ltsltovdjs"]
+
+[ext_resource type="Script" uid="uid://defg8fw8hdubq" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_modifier.gd" id="1_nb7hp"]
+[ext_resource type="Script" uid="uid://bmi3sw3w3ymx8" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect.gd" id="2_n7j4i"]
+
+[sub_resource type="Resource" id="Resource_esy2h"]
+script = ExtResource("1_nb7hp")
+attr_name = &"CooldownReduction"
+magnitude = 0.3
+metadata/_custom_type_script = "uid://defg8fw8hdubq"
+
+[resource]
+script = ExtResource("2_n7j4i")
+duration_policy = 2
+modifiers = Array[ExtResource("1_nb7hp")]([SubResource("Resource_esy2h")])
+comment = "技能冷却缩短 30%"
+metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"

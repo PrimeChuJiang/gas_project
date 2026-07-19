@@ -26,6 +26,9 @@ var asc: GASAbilitySystemComponent
 # 是否正在激活
 var is_active: bool = false
 
+# 冷却效果实例生效的handle，可用来获取最后一次生效的效果实例(有可能获得到的值对应的实例已free())
+var _cooldown_ge_handle: int = GASAbilitySystemComponent.INVALID_HANDLE
+
 # 生效的task
 var _active_task: Array[GASAbilityTask] = []
 
@@ -60,9 +63,9 @@ func commit_ability() -> bool:
 		return false
 	if _check_cooldown() and _check_cost():
 		if cost_ge:
-			asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(cost_ge))
+			asc.apply_gameplay_effect_spec_to_self(_make_cost_spec(cost_ge))
 		if cooldown_ge:
-			asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(cooldown_ge))
+			_cooldown_ge_handle = asc.apply_gameplay_effect_spec_to_self(_make_cooldown_spec(cooldown_ge))
 		GameLogger.info("GameplayAbility", "Cost & cooldown applied")
 		return true
 	return false
@@ -76,6 +79,12 @@ func end_ability(was_cancelled: bool) -> void:
 	assert(_active_task.is_empty(), "still some uncleared task")
 	ability_ended.emit(self, was_cancelled)
 	GameLogger.info("GameplayAbility", "Ending ability, cancelling active tasks")
+
+# 子类可以重写下面的两个创建spec的逻辑
+func _make_cooldown_spec(ge: GASGameplayEffect) -> GASEffectSpec:
+	return GASEffectSpec.new(ge)
+func _make_cost_spec(ge: GASGameplayEffect) -> GASEffectSpec:
+	return GASEffectSpec.new(ge)
 
 # 如果能力正处于冷却状态，则返回false
 func _check_cooldown() -> bool:

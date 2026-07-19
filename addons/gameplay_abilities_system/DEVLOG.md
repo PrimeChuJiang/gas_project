@@ -246,4 +246,35 @@ UE 对照：冷却时长用 ScalableFloat/MMC（ModifierMagnitudeCalculation）�
 
 ---
 
-*本轮结束时代码状态：三大 bug 修复 + 六项设计根治全部落地，全量手动回归通过。*
+## 7. 复盘：冷却缩短 30%（2026-07-19 完成）
+
+### 落地的东西
+
+- `commit_ability` 里开了两个虚函数缝 `_make_cooldown_spec` / `_make_cost_spec`（基类 = 无脑拷贝），
+  折算公式（读 CooldownReduction、clamp）写在游戏层 FireBolt 的 override 里——**插件提供机制，游戏提供策略**；
+- clamp 策略：乘数钳在 `[0.5, 1.0]`——冷却最多缩 50%，负 CDR 不延长冷却；
+- `_cooldown_ge_handle`：commit 时存票根，初始化为 `INVALID_HANDLE`（不让 int 默认值 0 成为协议外的第三种状态）；
+- 脱戒指恢复冷却是 modifier 架构**白送的**：`_cleanup_effect` 撤 modifier → CDR 自动归零，零额外代码；
+- TestAttributeSet 补了 Mana ↔ MaxMana 钳制。
+
+### 这轮想通的原则
+
+- **handle 是无记名票根**：ASC 只承诺"凭票精确退场"，语义由持票人保管（装备系统记槽位票，ability 记冷却票）。
+  谁 apply，谁在现场记票——过了现场，两个同 GE 实例无法区分（两枚相同戒指问题）。
+- **可见性三受众**：类自己 / 子类（下划线字段可碰，≈protected）/ 外界（只许调方法）。
+  公开字段是一份没打算签的合同（Hyrum's Law）——外界要的是"信息"（get_cooldown_remaining），不是"票"。
+- **pre_attribute_change 不是没用**：600 伤害打 500 血不变负数就是它干的。但它只守 BaseValue 写入（INSTANT/周期路径），
+  **modifier 路径（buff→current_value）绕过它**——UE 的完整答案是两个钩子
+  （PreAttributeBaseChange 守 base / PreAttributeChange 守 current，聚合器重算也触发）。
+  当前只有前者，所以 CDR 封顶只能钳在**使用侧**（override 里）。存储侧钳 current 记入备忘。
+- pre 答"这个值可以是多少"（纯函数防递归），post 答"这次改动引发什么"（连锁决策）——不是假活和真活。
+
+### 遗留
+
+- spec `_init` 加了 context/source_asc/target_asc 可选参数——目前全是死管道，等 `make_effect_spec()` 填活；
+- 思考题未答：Health 钳制用 MaxHealth 的 base_value，+200 最大生命 buff（改 current）不会抬高上限——该用哪个？
+- modifier 路径的 pre 钩子（存储侧钳 current_value）→ 并入小优化备忘。
+
+---
+
+*本轮结束时代码状态：CDR 折算 + 虚函数缝 + 冷却票根落地，手动回归通过（3s → 2.1s → 脱戒指恢复）。*
