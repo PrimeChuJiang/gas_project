@@ -443,6 +443,44 @@ UE 对照：冷却时长用 ScalableFloat/MMC（ModifierMagnitudeCalculation）�
 
 ---
 
+## 11. 下一课：EffectContext 接入与 make_effect_spec()
+
+### 问题本质
+
+目前所有 GE 数值都是配置里写死的静态 magnitude——"火球 -50"。但"造成**施法者攻击力 30%** 的伤害"
+这句话没法配：数值取决于**谁**施的法、施法时他的属性是多少。spec 的 `_init` 里躺了两轮的
+context / source_asc / target_asc 死管道，就是为这一刻留的。
+
+### 三个角色
+
+- **EffectContext**：这次施加的"案发现场"——至少记 source_asc（谁干的）；
+- **`asc.make_effect_spec(ge)`**：ASC 上的 spec 工厂（UE：MakeOutgoingSpec）——
+  造 spec 的同时把 context 填进去。今后"我要施加一个效果"都从这里出货，
+  而不是散落各处的 `GASEffectSpec.new(ge)`；
+- **运行时数值计算**：发生在 **spec 创建时刻**——和 CDR 折算完全同纹理
+  （第 7 节的 `_make_cooldown_spec` 虚函数缝就是先例），这次读的是 source 的 Attack。
+
+### 动手前必想的思考题
+
+1. **快照时机**："30% 攻击力"在哪个时刻读攻击力——创建 spec 时（快照）还是 apply 到目标时（实时）？
+   具体场景：火球出手瞬间攻击 buff 还在，飞行 0.5 秒后 buff 到期才命中——伤害按哪个算？
+   两种答案都是合法设计（UE：snapshot vs non-snapshot），但必须**想清楚并写下来**；
+2. **工厂的归属**：make_effect_spec 为什么长在 ASC 上而不是 GE 上？（提示：context 里的 source 是谁？）；
+3. **旧调用点迁移**：现有的 `GASEffectSpec.new(ge)` 散在哪几处？全部改走工厂，还是允许两条路并存？
+   （回忆"唯一收尾漏斗"的论证，入口和出口同理。）
+
+### 验证目标
+
+无 buff 火球伤害 = 基础值；攻击 buff 下伤害按 30% 折算变大；buff 到期后恢复
+——中间那条能同时验证快照时机的选择。
+
+### 更远的门
+
+这条链路打通后，MMC（ModifierMagnitudeCalculation）和 SetByCaller 就只是
+"把折算公式从子类 override 挪进可配置对象"的一步之遥。
+
+---
+
 *本轮结束时代码状态：push 式打断（cancel_with_tags + 0→1 扫描 + cancel_ability 漏斗）与
 end_ability 幂等闸落地，五条验收全绿；attribute_map 热身收官（断言→路由、边界校验、const）。
-遗留三笔挂在第 10 节。下一课：EffectContext 与 make_effect_spec()。*
+遗留三笔挂在第 10 节。下一课见第 11 节。*
