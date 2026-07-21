@@ -24,7 +24,18 @@ var _abilities: Array[GASGameplayAbility] = []
 # 当前正在激活的能力列表
 var _active_abilities: Array[GASGameplayAbility] = []
 
+func make_effect_spec(ge: GASGameplayEffect) -> GASEffectSpec:
+	var context : GASEffectContext = GASEffectContext.new()
+	context.instigator = owner_actor
+	context.effect_causer = avatar_actor
+	var spec = GASEffectSpec.new(ge, context, self)
+	return spec
+
 func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
+	if not spec : 
+		GameLogger.error("GameAbilitySystemComponent", "spec is null!")
+		return INVALID_HANDLE
+	spec.target_asc = self
 	if spec.effect_def.duration_policy == GASEnums.DurationPolicy.INSTANT:
 		for mod in spec.modifiers:
 			var attr_set : GASAttributeSet = _find_attribute_set(mod.attr_name)

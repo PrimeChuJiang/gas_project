@@ -255,6 +255,7 @@ UE 对照：冷却时长用 ScalableFloat/MMC（ModifierMagnitudeCalculation）�
 - `commit_ability` 里开了两个虚函数缝 `_make_cooldown_spec` / `_make_cost_spec`（基类 = 无脑拷贝），
   折算公式（读 CooldownReduction、clamp）写在游戏层 FireBolt 的 override 里——**插件提供机制，游戏提供策略**；
 - clamp 策略：乘数钳在 `[0.5, 1.0]`——冷却最多缩 50%，负 CDR 不延长冷却；
+  （2026-07-22 修订：上限放宽到 2.0——负 CDR 允许把冷却拉长至两倍，为"冷却延长"类 debuff 预留。）
 - `_cooldown_ge_handle`：commit 时存票根，初始化为 `INVALID_HANDLE`（不让 int 默认值 0 成为协议外的第三种状态）；
 - 脱戒指恢复冷却是 modifier 架构**白送的**：`_cleanup_effect` 撤 modifier → CDR 自动归零，零额外代码；
 - TestAttributeSet 补了 Mana ↔ MaxMana 钳制。
@@ -481,6 +482,59 @@ context / source_asc / target_asc 死管道，就是为这一刻留的。
 
 ---
 
-*本轮结束时代码状态：push 式打断（cancel_with_tags + 0→1 扫描 + cancel_ability 漏斗）与
-end_ability 幂等闸落地，五条验收全绿；attribute_map 热身收官（断言→路由、边界校验、const）。
-遗留三笔挂在第 10 节。下一课见第 11 节。*
+## 12. 复盘：EffectContext 接入与 make_effect_spec()——管道通水（2026-07-22 完成）
+
+> 你来写。括号里是引导问题，写完删掉。规矩同第 10 节：自己的话，能贴日志贴日志。
+
+### 三道思考题的最终答案
+
+- **快照 vs 实时**：（各自的实现位置在哪？"离手即定 / 持续附着"的经验法则；
+  实时选项为什么在管道通水前根本写不出来？）
+- **工厂的归属**：（为什么是 ASC 实例方法而不是 GE 方法/静态函数？"工厂的位置本身是一条数据"
+  这句话展开讲；无源效果（熔岩）的正确姿势是什么——为什么不是退回静态工厂？）
+- **迁移策略**：（为什么全迁？入口收拢和出口漏斗的论证哪里**不对称**——
+  强制手段 vs 三件软功夫；裸 new 的语义是"非法"还是"无源"？）
+
+### 落地的东西
+
+- （逐条：make_effect_spec 工厂（填了什么）/ apply 填 target_asc / 十八处迁移 +
+  README 三处 / _make_damage_spec 缝与 30% 攻击折算 / 快照挪到 activate + 字段持有 /
+  null 双门闩（生产者 return null、消费者 end_ability）/ ge_damage_base_attack.tres 配方归位）
+
+### 这轮想通的原则
+
+- **工厂填 source，apply 填 target**：（为什么是两个时刻两个填法？法球飞行的 0.5 秒
+  和"source 已知、target 未知"的空窗是什么关系？）
+- **改副本，不另起炉灶**：（spec._init 里 mod.duplicate() 当初为什么拍副本？
+  "扣 30 血"那版错在哪——配方被架空意味着什么？）
+- **报错必须带拦截**：（"装了警报器没装门闩"那版长什么样？fail-closed 的完整两句是什么？）
+- **谁生产 null，谁的调用方就得消费 null**：（return null 之后雷埋在了哪条数据流下游？）
+- **代码与文档不能静默分家**：（clamp 1.0→2.0 拖了四轮才对账——两边不一致时为什么
+  比两边都错更危险？）
+
+### 踩的坑
+
+- （"扣除 30 血"为什么是审讯线索而不是成功证明——数字对账怎么反推出配方是空的？）
+- （验票和用票必须是同一个对象——find_attribute_set 查两遍的问题；GAFireBold 拼写）
+
+### 验收记录
+
+| # | 用例 | 期望 | 结果 / 日志时间戳 |
+|---|---|---|---|
+| 1 | 无 buff 火球 | -80（50 + 0.3×100） | （填） |
+| 2 | 攻击 buff(+50) 下 | -95（50 + 0.3×150） | （填） |
+| 3 | buff 到期后 | 回 -80 | （填） |
+| 4 | **快照专项**：起手后命中前 buff 到期 | 仍 -95 | （填——这是本课毕业照） |
+| 5 | 回归：冷却 2.1s / 扣蓝 / 眩晕打断 | 全正常 | （填） |
+
+### 遗留
+
+- `world_origin` / `target_data` 仍无消费者；2D/3D 向量适配等第一个真实需求（范围伤害）再定；
+- `context.ability` 字段未填——工厂看不见"哪个能力造的我"，等有消费者时再接（可能的方案：
+  能力侧造 spec 后自己补，或 make_effect_spec 加可选参数）；
+- 快照/实时目前是"写在哪就是哪"，还没做成 GE 上的配置开关（UE bSnapshot）——MMC 课的素材；
+- 仓库根目录 `bash.exe.stackdump` 是崩溃转储垃圾文件，已被 git 追踪——应 rm + .gitignore。
+
+---
+
+*本轮结束时代码状态：（写完第 12 节后更新——参照第 10 节末尾那条的写法）*

@@ -1,7 +1,8 @@
 extends Node
 
-## 四个 GE 资源引用
+## GE 资源引用
 var ge_damage: GASGameplayEffect
+var ge_damage_base_attack: GASGameplayEffect
 var ge_buff: GASGameplayEffect
 var ge_dot: GASGameplayEffect
 var ge_big_damage: GASGameplayEffect
@@ -77,7 +78,7 @@ func test_instant_damage_ge():
 	"""
 	
 	# 3.创建 Spec 并应用
-	var spec = GASEffectSpec.new(damage_ge)
+	var spec = asc.make_effect_spec(damage_ge)
 	asc.apply_gameplay_effect_spec_to_self(spec)
 	
 	# 4.断言
@@ -116,7 +117,7 @@ func test_duration_buff_ge():
 	buff_ge.modifiers.append(mod)
 	"""
 
-	var spec = GASEffectSpec.new(buff_ge)
+	var spec = asc.make_effect_spec(buff_ge)
 	asc.apply_gameplay_effect_spec_to_self(spec)
 
 	# 断言：攻击力应该是 120
@@ -157,6 +158,7 @@ func _setup_character() -> void:
 
 func _load_ge_resources() -> void:
 	ge_damage = load("res://addons/gameplay_abilities_system/test/ge_damage_50.tres")
+	ge_damage_base_attack = load("res://addons/gameplay_abilities_system/test/ge_damage_base_attack.tres")
 	ge_buff = load("res://addons/gameplay_abilities_system/test/ge_attack_buff.tres")
 	ge_dot = load("res://addons/gameplay_abilities_system/test/ge_dot_poison.tres")
 	ge_big_damage = load("res://addons/gameplay_abilities_system/test/ge_damage_600.tres")
@@ -180,7 +182,7 @@ func _create_abilities() -> void:
 	block_tags.add_tag(GameplayTags.request_gameplay_tag(&"State.Debuff.Stun"))
 	
 	ga_fire_bolt = GAFireBoltAbility.new()
-	ga_fire_bolt.damage_ge = ge_damage
+	ga_fire_bolt.damage_ge = ge_damage_base_attack
 	ga_fire_bolt.cooldown_ge = cooldown_ge
 	ga_fire_bolt.cancel_with_tags = cancel_tags
 	ga_fire_bolt.activation_blocked_tags = block_tags
@@ -243,19 +245,19 @@ func _input(event: InputEvent):
 	GameLogger.debug("TestScene", event.as_text())
 	match event.as_text():
 		"1":
-			asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_damage))
+			asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_damage))
 			status_label.text = "状态: 受到伤害 -50"
 		"2":
-			asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_heal_50))
+			asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_heal_50))
 			status_label.text = "状态: 补充血量 +50 "
 		"3":
-			asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_dot))
+			asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_dot))
 			status_label.text = "状态: 中毒 (每0.5秒 -10)"
 		"4":
-			asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_big_damage))
+			asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_big_damage))
 			status_label.text = "状态: 受到巨大伤害 -600"
 		"5":
-			asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_stun))
+			asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_stun))
 			status_label.text = "状态: 眩晕 (1.5秒)"
 		"6":
 			if asc.try_activate_ability(ga_fire_bolt):
@@ -273,7 +275,7 @@ func _input(event: InputEvent):
 			asc.cancel_ability(ga_multi_task)
 			GameLogger.warn("TestScene", "asc._active_abilities.size = " + str(asc._active_abilities.size()))
 		"0":
-			var handle = asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_storm_shield))
+			var handle = asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_storm_shield))
 			test_ge_handles.append(handle)
 			old_handle = handle
 			GameLogger.info("TestScene", "get ge handle: " + str(handle))
@@ -287,20 +289,20 @@ func _input(event: InputEvent):
 			var res = asc.remove_active_effect(old_handle)
 			GameLogger.info("TestScene", "remove old_handle: " + str(old_handle) + " answer: " + str(res))
 		"Q":
-			asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_buff))
+			asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_buff))
 			status_label.text = "状态: 攻击力 +20 "
 		"W":
-			var handle = asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_add_max_health))
+			var handle = asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_add_max_health))
 			test_ge_handles.append(handle)
 			old_handle = handle
 			GameLogger.info("TestScene", "get ge handle: " + str(handle))
 		"E":
-			var handle = asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_swift_ring))
+			var handle = asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_swift_ring))
 			test_ge_handles.append(handle)
 			old_handle = handle
 			GameLogger.info("TestScene", "get ge handle: " + str(handle))
 		"R":
-			var handle = asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_add_max_mana))
+			var handle = asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_add_max_mana))
 			test_ge_handles.append(handle)
 			old_handle = handle
 			GameLogger.info("TestScene", "get ge handle: " + str(handle))

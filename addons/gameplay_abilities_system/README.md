@@ -166,7 +166,7 @@ ASC.try_activate_ability(fire_bolt)
            queue_free()          ← 从场景树自删
 
 _on_charge_done(_task):
-    ASC.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_damage))
+    ASC.apply_gameplay_effect_spec_to_self(ASC.make_effect_spec(ge_damage))
        │
        └─► INSTANT 路径:
               AttrSet.apply_base_value_change("Health", -50)
@@ -261,8 +261,8 @@ Modifiers:
 
 ```gdscript
 var ge = load("res://ge_damage.tres")
-var spec = GASEffectSpec.new(ge)
-asc.apply_gameplay_effect_spec_to_self(spec)
+var spec = asc.make_effect_spec(ge)  # 工厂造 spec：context 与 source_asc 自动填好
+asc.apply_gameplay_effect_spec_to_self(spec)  # apply 时填 target_asc
 
 print(attr_set.get_attribute_value(&"Health"))  # 450
 ```
@@ -279,7 +279,7 @@ Modifiers:
 
 ```gdscript
 var ge = load("res://ge_buff.tres")
-asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge))
+asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge))
 
 print(attr_set.get_attribute_value(&"Attack"))  # 比基础值 +30
 # ...5 秒后...

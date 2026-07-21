@@ -21,7 +21,7 @@ var effect_causer: Node # 物理来源 (投射物/陷阱/区域本身)
 var ability: Resource # 产生此效果的能力实例 (可选)
 var source_object: Object # 来源对象 (武器/道具等)
 var target_data: Array # 目标数据 (命中位置，命中目标列表等)
-var world_0rigin: Vector3 # 效果的世界空间起始位置
+var world_origin: Vector3 # 效果的世界空间起始位置
 var has_world_origin : bool # world_origin 是否有效
 
 func clone() -> GASEffectContext:
@@ -31,6 +31,6 @@ func clone() -> GASEffectContext:
 	copy.ability = ability
 	copy.source_object = source_object
 	copy.target_data = target_data.duplicate()
-	copy.world_0rigin = world_0rigin
+	copy.world_origin = world_origin
 	copy.has_world_origin = has_world_origin
 	return copy

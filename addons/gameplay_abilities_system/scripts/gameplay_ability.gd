@@ -88,9 +88,9 @@ func end_ability(was_cancelled: bool) -> void:
 
 # 子类可以重写下面的两个创建spec的逻辑
 func _make_cooldown_spec(ge: GASGameplayEffect) -> GASEffectSpec:
-	return GASEffectSpec.new(ge)
+	return asc.make_effect_spec(ge)
 func _make_cost_spec(ge: GASGameplayEffect) -> GASEffectSpec:
-	return GASEffectSpec.new(ge)
+	return asc.make_effect_spec(ge)
 
 # 如果能力正处于冷却状态，则返回false
 func _check_cooldown() -> bool:
