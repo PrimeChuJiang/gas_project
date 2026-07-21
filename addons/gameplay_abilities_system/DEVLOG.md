@@ -1,4 +1,4 @@
-# GAS 开发日志 · 调试与重构专场（2026-07-18 ~ 07-19）
+# GAS 开发日志 · 调试与重构专场（2026-07-18 ~ 07-22）
 
 > 本文档记录一轮完整的 debug 之旅：三个被掩盖的真 bug、六个顺手根治的设计问题、
 > 以及沉淀下来的九条框架设计原则。用于温故，也是后续开发的基线。
@@ -145,14 +145,16 @@
 ## 3. 九条原则速查（背下来）
 
 1. **先记账，再放权** —— 框架状态更新先于用户代码；emit 前完成 erase。
-2. **唯一收尾漏斗** —— N 条退出路径汇入 1 个清理函数（end_ability / end_task / _cleanup_effect，本轮搭了三次）。
+2. **唯一收尾漏斗 + 漏斗幂等** —— N 条退出路径汇入 1 个清理函数（end_ability / end_task / _cleanup_effect）；
+   漏斗自身必须经得起被走两次，重复调用安静滑过（end_ability 开头的 is_active 闸，2026-07-22 补全）。
 3. **生命周期不变量 + 配对** —— 谁登记谁注销；所有 Ability 路径的终点必须是 end_ability。
 4. **门票代替引用** —— 跨系统持有的凭据用 ID，不用对象引用；旧票优雅 false。
 5. **fail-open vs fail-closed** —— "查询无法成立"才需要抉择；付费关口从严 + 大声报告。
 6. **查询与命令分离（CQS）** —— 检查随时做，命令只做一次且基于当下。
 7. **校验压在边界** —— 配置合法性在装载时查一次；被复用的谓词里不写调用方视角的日志。
 8. **计数 + 跳变沿** —— 多方共享的状态用引用计数；信号只在存在性真正改变时发。
-9. **数据当参数传** —— 清理函数吃 entry，不删后回查；遍历中会被回调修改的集合用快照或倒序。
+9. **数据当参数传** —— 清理函数吃 entry，不删后回查；遍历中会被回调修改的集合：
+   只删当前元素时倒序够用；回调可能任意增删时用快照 + 点名前查活（2026-07-22 补全）。
 
 ---
 
@@ -237,12 +239,12 @@ UE 对照：冷却时长用 ScalableFloat/MMC（ModifierMagnitudeCalculation）�
 1. **眩晕打断进行中技能**：Ability 加 `cancel_with_tags`；`_add_owned_tag` 的 0→1 跳变时
    扫描 `_active_abilities` 主动 cancel（push 式打断落地）；
 2. **EffectContext 接入**：ASC 加 `make_effect_spec()`（对应 MakeOutgoingSpec），
-  spec 携带 source_asc → 通往"30% 攻击力伤害"（MMC / SetByCaller）；
+    spec 携带 source_asc → 通往"30% 攻击力伤害"（MMC / SetByCaller）；
 3. **GameplayCue**：`gameplay_cue_tags` 目前无人消费；
 4. **Stacking**（连按 2 无限叠 buff 是已知未实现）；
 5. 更多 Task：WaitInput（连招）、WaitAnimNotify；
 6. 小优化备忘：tag 祖先计数 O(1) 查询；周期效果首跳是否立即
-  （UE 默认 bExecutePeriodicEffectOnApplication = true，当前实现是首个周期后才跳，属设计选择）。
+    （UE 默认 bExecutePeriodicEffectOnApplication = true，当前实现是首个周期后才跳，属设计选择）。
 
 ---
 
@@ -344,4 +346,103 @@ UE 对照：冷却时长用 ScalableFloat/MMC（ModifierMagnitudeCalculation）�
 
 ---
 
-*本轮结束时代码状态：CDR 折算 + 冷却票根 + 属性上限联动落地；MaxHealth 链路验证通过，Mana 冒烟与四条小遗留挂在第 8 节。*
+## 10. 复盘：眩晕打断进行中技能——push 式打断与漏斗幂等（2026-07-22 完成）
+
+### 热身清理（attribute_map 收官）
+
+- match 臂删除后，`has()` 的**含义变了**（注意：不是"还是原来的意思"）：
+  原来是**断言**——match 在前面把关，"查不到 = 不变量被破坏"，配 error；
+  删掉 match 后，**每一个**属性变化（Attack/Health/Mana）都涌进 `_on_attribute_changed`，
+  `has()` 变成**路由**——"不在 map 里"是 Attack 的正常答案，必须静默流过。
+  代码一个字没变，调用方契约变了，else 从"大声验尸"翻成"必须沉默"。
+  它同时是防递归的闸：压顶引发的 Health 变化重入时在这里被无声挡下。
+- error 的家搬到 `initialize_attributes`（装载边界）：配置对不对开局查一次，
+  运行时路径里不该有"配置错了"的分支（原则 7），而不是每次运行相关逻辑都报一次。
+- 德摩根翻车两次（加了 not 没翻 and）后拆成两个独立 if：不用背取反规则，
+  且 key/value 各自精确报错、双缺双报，debug 时直接知道是哪一侧缺了谁。
+  复杂布尔条件的一种修法是把它拆到不需要德摩根。
+
+### 落地的东西
+
+- `cancel_with_tags`：声明 ability 会被哪些 tag 打断；里面存宽泛值，
+  做后续精确 tag 调 `matches_tag` 时的参数（具体的调、宽泛的当参数，与 has_tag 方向一致）；
+- `_add_owned_tag` 仅 0→1 分支扫描：1→2 时 tag 一直存在，没有"出现"这个事件；
+  且屋里不可能有可断对象——0→1 那次已清场，之后门禁一直守着（不变量由 push/pull 合力维护）；
+- 扫描走 `cancel_ability` 漏斗：它的 `has()` 账本检查恰好就是快照模式的"点名前查活"，
+  快照里的过期条目被无声挡下；命中即 break——断一次就够，剩下的 tag 不用再比；
+- `end_ability` 幂等闸：开头非激活态直接 return（详见下方"漏斗幂等"）；
+- 两处日志顺序修正（ability_task_delay / end_ability）：日志在动作之前打；
+- FireBolt 配齐 block + cancel 双侧，五条验收全绿。
+
+### 活体实验：push/pull 各守半场
+
+只配了 `cancel_with_tags`、没配 `activation_blocked_tags` 时，先上晕再按火球：
+
+```
+[DEBUG][15:40:05][TestScene]:5
+[DEBUG][15:40:05][TestScene]:6
+[INFO][15:40:05][GameplayAbility]:Ability activated      ← 晕中照样起手
+[INFO][15:40:07][AbilityTask]:Task ended, queue_free
+[INFO][15:40:07][GameplayAbility]:Cost & cooldown applied ← 全程施放完成，伤害落地
+```
+
+- **push 是事件（跳变沿）**：只在 tag 出现那一瞬扫一次屋，管不了**之后才进屋的**——
+  晕中起手时，跳变沿早已过去；
+- **pull 是状态检查（门禁）**：只在激活那一刻查一次，管不了**进门之后才发生的事件**；
+- 分工一句话：push 管"事件发生时屋里已有的"，pull 管"状态存在期间想进门的"——
+  缺任何一边都是洞。这次是先亲手漏了球（上面这段日志）才补上的。
+
+### 这轮想通的原则
+
+- **快照 + 点名前查活 vs 倒序**（并入原则 9）：倒序安全的前提 = 遍历中的删除**只发生在当前元素**
+  （end_ability 取消自己的 task 满足）；这里 cancel 触发的信号回调可能**任意增删**
+  （连锁结束别的技能、激活新技能入账），前提即崩。快照冻结点名名单，
+  `cancel_ability` 的 `has()` 负责查活——过期条目优雅跳过，正是门票机制那套"旧票无害化"。
+  并入原则 9 的理由：同是"回调会动集合"的应对，has 查活本身也是一次验票。
+- **跳变沿是递归的自然刹车**：一轮级联 = 一次源头事件**同步**引发的整条嵌套调用链
+  （上晕 → 扫描 → cancel → end_ability → task 回调 apply 虚弱 GE → 重入 `_add_owned_tag`，
+  全在同一个调用栈里走完）。级联中 tag 计数只升不降（到期扣减在之后的 `_process` 帧），
+  同一 tag 第二次 apply 必然是 1→2——无跳变沿，扫描不触发，递归链在此断掉。
+  跳变沿不只是省性能：它保证同一个 tag 在一轮级联里只能点燃一次扫描。
+- **漏斗幂等（原则 2 补全）**：闸在 `end_ability` 第一行，非激活态直接 return。
+  不装闸的三桩账：① `ability_ended` 发两次，"一次激活对应一次结束"的契约碎裂；
+  ② 外层倒序循环的 range 按进门时的 size 算死，二次进入清空列表后索引越界崩溃；
+  ③ 崩溃点与病根隔两层信号回调，debug 时先冤枉 task。
+  修调用点是低级修法——防得了这个调用方，防不了窗口期里的下一个；
+  所有死亡路径都汇进漏斗，闸就装在漏斗嘴上。
+  注意分清两道刹车：**没有闸，递归也不会无限**（刹车是跳变沿）；闸保的是上面三条命。
+- **日志在动作之前打**：倒叙日志误导时序判断——修正前读起来是"task 先死、能力后知后觉"
+  （Cancelling task 出现在 Ending ability 之前）；修正后
+  Ending ability → Cancelling task → Task ended，与真实调用栈的展开顺序一致。
+
+### 踩的坑
+
+- **`@export` 字段名会序列化进 .tres**：cancle → cancel 必须趁只有一两个资源时改——
+  等二十个技能资源都存着旧属性名，改名后 Godot 加载对不上号，配置**静默丢失**
+  （不只是"写代码难受"的问题）；
+- **"账本里有但 is_active 已 false"的窗口期**：不是测试撞出来的，
+  是推演"技能被打断时给自己上一层 debuff"这个合法玩法需求时推出来的——
+  框架的闸为将来任何用户代码而装，信号回调是交出去的话筒，别人喊什么管不着，框架自己得站稳。
+
+### 验收记录
+
+| # | 用例 | 结果 | 证据（日志时间戳） |
+|---|---|---|---|
+| 1 | 蓄力中上晕 → 断、伤害不落地 | ✓ | 15:39:10 task 取消；无 "Cost & cooldown applied"，commit 根本没发生 |
+| 2 | 晕中叠晕不二次扫描 | ✓ | 15:39:12~22 连按 5，无扫描、到期无 remove 报错 |
+| 3 | 晕到期恢复施放 | ✓ | 16:10:01 两次被拦 → 16:10:02 激活成功 |
+| 4 | 未配 cancel_with_tags 的 multi_task 免疫 | ✓ | 15:39:34 上晕，task 2 活到 15:39:43 自然善终 |
+| 5 | 晕中按火球被门禁拦下 | ✓ | 15:41:44 / 15:41:46 `_check_block = false`（补配前 15:40:05 漏球，见活体实验） |
+
+### 遗留
+
+- `FGameplayTagContainer` 缺反方向查询方法（"容器里有没有把 query 收进范畴的"），ASC 暂时手伸 `_tags`；
+- 测试文件残留 `cancle_tags` / "cancled" 拼写；
+- `end_ability` 闸口静默 return vs 打 debug 日志：暂定静默（对齐"旧票无害化"），
+  开发期如需排查"谁在重复调我"再加。
+
+---
+
+*本轮结束时代码状态：push 式打断（cancel_with_tags + 0→1 扫描 + cancel_ability 漏斗）与
+end_ability 幂等闸落地，五条验收全绿；attribute_map 热身收官（断言→路由、边界校验、const）。
+遗留三笔挂在第 10 节。下一课：EffectContext 与 make_effect_spec()。*

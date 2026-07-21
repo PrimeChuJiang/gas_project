@@ -14,6 +14,9 @@ signal ability_ended(ability: GASGameplayAbility, was_cancelled: bool)
 # 激活能力不能有的标签，有任何一个都不能激活
 @export var activation_blocked_tags: FGameplayTagContainer = FGameplayTagContainer.new()
 
+# 能力激活中能力被打断的标签
+@export var cancel_with_tags: FGameplayTagContainer = FGameplayTagContainer.new() 
+
 # 消耗GE(例如扣除蓝量)， 激活时施加给自身
 @export var cost_ge: GASGameplayEffect
 
@@ -71,6 +74,10 @@ func commit_ability() -> bool:
 	return false
 
 func end_ability(was_cancelled: bool) -> void:
+	GameLogger.info("GameplayAbility", "Ending ability, cancelling active tasks")
+	if not is_active : 
+		GameLogger.debug("GameplayAbility", "ability is already ended!")
+		return
 	is_active = false
 	for i in range(_active_task.size() - 1 , -1, -1):
 		if _active_task[i].is_running:
@@ -78,7 +85,6 @@ func end_ability(was_cancelled: bool) -> void:
 			_active_task[i].end_task(true)
 	assert(_active_task.is_empty(), "still some uncleared task")
 	ability_ended.emit(self, was_cancelled)
-	GameLogger.info("GameplayAbility", "Ending ability, cancelling active tasks")
 
 # 子类可以重写下面的两个创建spec的逻辑
 func _make_cooldown_spec(ge: GASGameplayEffect) -> GASEffectSpec:

@@ -27,6 +27,12 @@ layout_mode = 2
 [node name="MaxHealthLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=576013526]
 layout_mode = 2
 
+[node name="ManaLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=867600538]
+layout_mode = 2
+
+[node name="MaxManaLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=1168742517]
+layout_mode = 2
+
 [node name="AttackLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=1876325470]
 layout_mode = 2
 

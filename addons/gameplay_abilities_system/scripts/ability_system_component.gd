@@ -164,6 +164,7 @@ func _add_owned_tag(tag: FGameplayTag):
 	if not _tag_counts.has(tag):
 		_tag_counts[tag] = 1
 		gameplay_tag_changed.emit(tag, true)
+		_cancel_active_abilities_with_tag(tag)
 	else :
 		_tag_counts[tag] += 1
 
@@ -175,3 +176,12 @@ func _remove_owned_tag(tag: FGameplayTag):
 	if _tag_counts[tag] == 0:
 		_tag_counts.erase(tag)
 		gameplay_tag_changed.emit(tag, false)
+
+func _cancel_active_abilities_with_tag(tag: FGameplayTag):
+	var _active_ability_duplicate: Array[GASGameplayAbility]
+	_active_ability_duplicate = _active_abilities.duplicate()
+	for ability in _active_ability_duplicate:
+		for ability_tag in ability.cancel_with_tags._tags:
+			if tag.matches_tag(ability_tag):
+				cancel_ability(ability)
+				break

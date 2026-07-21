@@ -10,6 +10,7 @@ var ge_storm_shield: GASGameplayEffect
 var ge_swift_ring: GASGameplayEffect
 var ge_heal_50: GASGameplayEffect
 var ge_add_max_health: GASGameplayEffect
+var ge_add_max_mana: GASGameplayEffect
 
 var ga_fire_bolt: GAFireBoltAbility
 var ga_instance: GAInstanceTest
@@ -27,6 +28,8 @@ var _ui_tags: Array[FGameplayTag] = []
 
 @onready var health_label = $CanvasLayer/VBoxContainer/HealthLabel
 @onready var max_health_label = $CanvasLayer/VBoxContainer/MaxHealthLabel
+@onready var mana_label: Label = $CanvasLayer/VBoxContainer/ManaLabel
+@onready var max_mana_label: Label = $CanvasLayer/VBoxContainer/MaxManaLabel
 @onready var attack_label = $CanvasLayer/VBoxContainer/AttackLabel
 @onready var status_label = $CanvasLayer/VBoxContainer/StatusLabel
 @onready var tag_label = $CanvasLayer/VBoxContainer/TagLabel
@@ -162,6 +165,7 @@ func _load_ge_resources() -> void:
 	ge_swift_ring = load("res://addons/gameplay_abilities_system/test/ge_swift_ring.tres")
 	ge_heal_50 = load("res://addons/gameplay_abilities_system/test/ge_heal_50.tres")
 	ge_add_max_health = load("res://addons/gameplay_abilities_system/test/ge_add_max_health.tres")
+	ge_add_max_mana = load("res://addons/gameplay_abilities_system/test/ge_add_max_mana.tres")
 
 func _create_abilities() -> void:
 	var cooldown_ge = GASGameplayEffect.new()
@@ -170,10 +174,16 @@ func _create_abilities() -> void:
 	var cd_tags = FGameplayTagContainer.new()
 	cd_tags.add_tag(GameplayTags.request_gameplay_tag(&"Ability.Fire.Cooldown"))
 	cooldown_ge.granted_tag = cd_tags
+	var cancel_tags = FGameplayTagContainer.new()
+	cancel_tags.add_tag(GameplayTags.request_gameplay_tag(&"State.Debuff.Stun"))
+	var block_tags = FGameplayTagContainer.new()
+	block_tags.add_tag(GameplayTags.request_gameplay_tag(&"State.Debuff.Stun"))
 	
 	ga_fire_bolt = GAFireBoltAbility.new()
 	ga_fire_bolt.damage_ge = ge_damage
 	ga_fire_bolt.cooldown_ge = cooldown_ge
+	ga_fire_bolt.cancel_with_tags = cancel_tags
+	ga_fire_bolt.activation_blocked_tags = block_tags
 	
 	var ge_cost_mana = GASGameplayEffect.new()
 	ge_cost_mana.duration_policy = GASEnums.DurationPolicy.INSTANT
@@ -221,6 +231,8 @@ func _refresh_ui():
 	health_label.text = "生命：%d" % attr_set.get_attribute_value(&"Health")
 	attack_label.text = "攻击：%d" % attr_set.get_attribute_value(&"Attack")
 	max_health_label.text = "最大生命值：%d" % attr_set.get_attribute_value(&"MaxHealth")
+	mana_label.text = "魔力：%d" % attr_set.get_attribute_value(&"Mana")
+	max_mana_label.text = "最大魔力值：%d" % attr_set.get_attribute_value(&"MaxMana")
 
 func _on_attribute_changed(attr_name: StringName, new_value: float, old_value: float):
 	_refresh_ui()
@@ -284,6 +296,11 @@ func _input(event: InputEvent):
 			GameLogger.info("TestScene", "get ge handle: " + str(handle))
 		"E":
 			var handle = asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_swift_ring))
+			test_ge_handles.append(handle)
+			old_handle = handle
+			GameLogger.info("TestScene", "get ge handle: " + str(handle))
+		"R":
+			var handle = asc.apply_gameplay_effect_spec_to_self(GASEffectSpec.new(ge_add_max_mana))
 			test_ge_handles.append(handle)
 			old_handle = handle
 			GameLogger.info("TestScene", "get ge handle: " + str(handle))

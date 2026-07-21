@@ -3,7 +3,7 @@ extends GASAttributeSet
 
 var _initialized: bool = false
 
-var attribute_map: Dictionary[StringName, StringName] = {
+const attribute_map: Dictionary[StringName, StringName] = {
 	&"MaxHealth" : &"Health",
 	&"MaxMana" : &"Mana"
 }
@@ -21,6 +21,12 @@ func pre_attribute_change(attr_name: StringName, new_value: float) -> float:
 func initialize_attributes(owner_asc: GASAbilitySystemComponent):
 	if not _initialized:
 		super.initialize_attributes(owner_asc)
+		for key in attribute_map.keys():
+			var value = attribute_map[key]
+			if not _attributes.has(key):
+				GameLogger.error("TestAttributeSet", "attribute key: " + key + " not in _attributes")
+			if not _attributes.has(value):
+				GameLogger.error("TestAttributeSet", "attribute value: " + value + " not in _attributes")
 		# 连接signal放在initialize_attribute之后，防止我们在初始化的时候触发signal
 		_connect_signal()
 		_initialized = true
@@ -31,14 +37,11 @@ func _connect_signal():
 	attribute_changed.connect(_on_attribute_changed)
 
 func _on_attribute_changed(attr_name: StringName, new_value: float, old_value: float) -> void:
-	match attr_name:
-		&"MaxHealth", &"MaxMana":
-			_shrink_to_max(attr_name, new_value)
+	if attribute_map.has(attr_name):
+		_shrink_to_max(attr_name, new_value)
 
 func _shrink_to_max(attr_name: StringName, new_value: float):
-	if attribute_map.has(attr_name):
-		var mapped_attr_name = attribute_map[attr_name]
-		if new_value < _attributes[mapped_attr_name].current_value:
-			apply_base_value_change(mapped_attr_name, new_value - get_attribute_value(mapped_attr_name))
-	else:
-		GameLogger.error("TestAttributeSet", "AttributeMap don't have the attr_name!")
+	var mapped_attr_name = attribute_map[attr_name]
+	if new_value < get_attribute_value(mapped_attr_name):
+		apply_base_value_change(mapped_attr_name, new_value - get_attribute_value(mapped_attr_name))
+	
