@@ -90,7 +90,9 @@ func end_ability(was_cancelled: bool) -> void:
 func _make_cooldown_spec(ge: GASGameplayEffect) -> GASEffectSpec:
 	return asc.make_effect_spec(ge)
 func _make_cost_spec(ge: GASGameplayEffect) -> GASEffectSpec:
-	return asc.make_effect_spec(ge)
+	var spec: GASEffectSpec = asc.make_effect_spec(ge)
+	spec.target_asc = asc
+	return spec
 
 # 如果能力正处于冷却状态，则返回false
 func _check_cooldown() -> bool:
@@ -104,16 +106,19 @@ func _check_cooldown() -> bool:
 # 检查是否足够消耗
 func _check_cost() -> bool:
 	if cost_ge:
-		for mod in cost_ge.modifiers:
-			if mod.op == GASEnums.ModifierOp.ADD and mod.magnitude < 0:
-				var attr_set = asc.find_attribute_set(mod.attr_name)
+		var cost_ge_spec: GASEffectSpec = _make_cost_spec(cost_ge)
+		cost_ge_spec.resolve_all()
+		var mod_specs: Array[GASModifierSpec] = cost_ge_spec.modifiers
+		for mod_spec in mod_specs:
+			if mod_spec.op == GASEnums.ModifierOp.ADD and mod_spec.get_magnitude() < 0:
+				var attr_set = asc.find_attribute_set(mod_spec.attr_name)
 				if attr_set:
-					var current = attr_set.get_attribute_value(mod.attr_name)
-					if current + mod.magnitude < 0:
+					var current = attr_set.get_attribute_value(mod_spec.attr_name)
+					if current + mod_spec.get_magnitude() < 0:
 						GameLogger.info("GameplayAbility", "_check_cost = false, cost not enough")
 						return false
 				else:
-					GameLogger.error("GameplayAbility", "no attr_name called " + mod.attr_name + " in attr_set")
+					GameLogger.error("GameplayAbility", "no attr_name called " + mod_spec.attr_name + " in attr_set")
 					return false
 	return true
 

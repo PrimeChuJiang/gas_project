@@ -92,18 +92,18 @@ func test_instant_damage_ge():
 func test_duration_buff_ge():
 	var character = Node.new()
 	add_child(character)
-
+	
 	var asc = GASAbilitySystemComponent.new()
 	asc.name = "ASC"
 	character.add_child(asc)
-
+	
 	var attr_set = TestAttributeSet.new()
 	attr_set.initial_attributes = {
 		&"Attack": 100.0
 	}
 	attr_set.initialize_attributes(asc)
 	asc.add_attribute_set(attr_set)
-
+	
 	# 定义 +20 攻击力的 DURATION GE（持续 1 秒）
 	var buff_ge = load("res://addons/gameplay_abilities_system/test/ge_attack_buff.tres")
 	"""
@@ -116,23 +116,23 @@ func test_duration_buff_ge():
 	mod.magnitude = 20.0
 	buff_ge.modifiers.append(mod)
 	"""
-
+	
 	var spec = asc.make_effect_spec(buff_ge)
 	asc.apply_gameplay_effect_spec_to_self(spec)
-
+	
 	# 断言：攻击力应该是 120
 	var attack = attr_set.get_attribute_value(&"Attack")
 	print("Attack during buff: ", attack, " (期望: 120)")
 	assert(attack == 120.0, "Buff 后攻击力应为 120，实际: %s" % attack)
-
+	
 	# 等待效果过期（多等 0.2 秒确保 _process 跑完）
 	await get_tree().create_timer(3.2).timeout
-
+	
 	# 断言：过期后攻击力回退到 100
 	attack = attr_set.get_attribute_value(&"Attack")
 	print("Attack after buff expires: ", attack, " (期望: 100)")
 	assert(attack == 100.0, "Buff 过期后攻击力应为 100，实际: %s" % attack)
-
+	
 	character.free()
 	print("PASS: test_duration_buff_ge")
 
@@ -192,7 +192,10 @@ func _create_abilities() -> void:
 	var mod = GEModifier.new()
 	mod.attr_name = &"Mana"
 	mod.op = GASEnums.ModifierOp.ADD
-	mod.magnitude = -100
+	var magnitude: GASModifierMagnitudeScalableFloat = GASModifierMagnitudeScalableFloat.new()
+	magnitude.value = -100.0
+	mod.magnitude = magnitude
+	
 	ge_cost_mana.modifiers.append(mod)
 	ga_fire_bolt.cost_ge = ge_cost_mana
 	
@@ -231,10 +234,15 @@ func _on_tag_changed(tag: FGameplayTag, added: bool):
 
 func _refresh_ui():
 	health_label.text = "生命：%d" % attr_set.get_attribute_value(&"Health")
+	GameLogger.debug("TestScene", "Health is %d" % attr_set.get_attribute_value(&"Health"))
 	attack_label.text = "攻击：%d" % attr_set.get_attribute_value(&"Attack")
+	GameLogger.debug("TestScene", "Attack is %d" % attr_set.get_attribute_value(&"Attack"))
 	max_health_label.text = "最大生命值：%d" % attr_set.get_attribute_value(&"MaxHealth")
+	GameLogger.debug("TestScene", "MaxHealth is %d" % attr_set.get_attribute_value(&"MaxHealth"))
 	mana_label.text = "魔力：%d" % attr_set.get_attribute_value(&"Mana")
+	GameLogger.debug("TestScene", "Mana is %d" % attr_set.get_attribute_value(&"Mana"))
 	max_mana_label.text = "最大魔力值：%d" % attr_set.get_attribute_value(&"MaxMana")
+	GameLogger.debug("TestScene", "MaxMana is %d" % attr_set.get_attribute_value(&"MaxMana"))
 
 func _on_attribute_changed(attr_name: StringName, new_value: float, old_value: float):
 	_refresh_ui()

@@ -2,11 +2,19 @@
 
 [ext_resource type="Script" uid="uid://defg8fw8hdubq" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_modifier.gd" id="1_w3b80"]
 [ext_resource type="Script" uid="uid://bmi3sw3w3ymx8" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect.gd" id="2_i7n1r"]
+[ext_resource type="Script" uid="uid://cxuqv0vo8n11f" path="res://addons/gameplay_abilities_system/scripts/modifier_magnitude/modifier_magnitude_attribute_based.gd" id="2_vvdd4"]
+
+[sub_resource type="Resource" id="Resource_jb136"]
+script = ExtResource("2_vvdd4")
+attr_name = &"Attack"
+coefficient = -0.3
+post_add = -50.0
+metadata/_custom_type_script = "uid://cxuqv0vo8n11f"
 
 [sub_resource type="Resource" id="Resource_cttfp"]
 script = ExtResource("1_w3b80")
 attr_name = &"Health"
-magnitude = -50.0
+magnitude = SubResource("Resource_jb136")
 metadata/_custom_type_script = "uid://defg8fw8hdubq"
 
 [resource]

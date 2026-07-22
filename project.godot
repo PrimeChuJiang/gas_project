@@ -25,3 +25,10 @@ GameplayTags="*uid://cu1tica0d6ofq"
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/gameplay_abilities_system/plugin.cfg", "res://addons/gameplay_tags/plugin.cfg", "res://addons/logger/plugin.cfg")
+
+[file_customization]
+
+folder_colors={
+"res://addons/gameplay_abilities_system/scripts/modifier_magnitude/": "gray",
+"res://addons/gameplay_abilities_system/test/": "blue"
+}

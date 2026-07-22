@@ -89,7 +89,7 @@ static func print_log(level : LogLevel = LogLevel.DEBUG, header : StringName = "
 	# 5. 时间戳
 	var time_str := ""
 	if show_time:
-		time_str = "[" + Time.get_time_string_from_system(true) + "]"
+		time_str = "[" + Time.get_time_string_from_system(false) + "]"
 
 	var label : String = LEVEL_LABELS.get(level, "[UNKNOWN]")
 

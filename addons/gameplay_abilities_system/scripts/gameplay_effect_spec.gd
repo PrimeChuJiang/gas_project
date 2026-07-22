@@ -18,8 +18,7 @@ var level: float = 0.0
 var duration: float = 0.0
 var period: float = 0.0
 # 和定义层的结构是一致的，但magnitude是已经计算好了的
-# 元素为Dictionary:{attr_name: StringName, op: ModifierOp, magnitude: float}
-var modifiers: Array[GEModifier] = [] 
+var modifiers: Array[GASModifierSpec] = [] 
 
 func _init(effect: GASGameplayEffect, spec_context: GASEffectContext = null, spec_source_asc: GASAbilitySystemComponent = null, spec_target_asc: GASAbilitySystemComponent = null):
 	effect_def = effect
@@ -29,4 +28,10 @@ func _init(effect: GASGameplayEffect, spec_context: GASEffectContext = null, spe
 	source_asc = spec_source_asc
 	target_asc = spec_target_asc
 	for mod in effect.modifiers:
-		modifiers.append(mod.duplicate())
+		var mod_spec: GASModifierSpec = GASModifierSpec.new(mod, self)
+		modifiers.append(mod_spec)
+
+func resolve_all():
+	for mod_spec in modifiers:
+		if not mod_spec.resolved:
+			mod_spec.resolve(self)

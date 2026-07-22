@@ -1,12 +1,18 @@
 [gd_resource type="Resource" script_class="GASGameplayEffect" format=3 uid="uid://dq3ltsltovdjs"]
 
 [ext_resource type="Script" uid="uid://defg8fw8hdubq" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_modifier.gd" id="1_nb7hp"]
+[ext_resource type="Script" uid="uid://m5x7nbfvllco" path="res://addons/gameplay_abilities_system/scripts/modifier_magnitude/modifier_magnitude_scalable_float.gd" id="2_esy2h"]
 [ext_resource type="Script" uid="uid://bmi3sw3w3ymx8" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect.gd" id="2_n7j4i"]
+
+[sub_resource type="Resource" id="Resource_ovyxp"]
+script = ExtResource("2_esy2h")
+value = 0.3
+metadata/_custom_type_script = "uid://m5x7nbfvllco"
 
 [sub_resource type="Resource" id="Resource_esy2h"]
 script = ExtResource("1_nb7hp")
 attr_name = &"CooldownReduction"
-magnitude = 0.3
+magnitude = SubResource("Resource_ovyxp")
 metadata/_custom_type_script = "uid://defg8fw8hdubq"
 
 [resource]
