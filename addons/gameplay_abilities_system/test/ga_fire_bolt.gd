@@ -9,10 +9,12 @@ func activate() -> void:
 	super.activate()
 	
 	_damage_spec = asc.make_effect_spec(damage_ge)
+	
 	if not _damage_spec :
 		end_ability(true)
 		return
 	
+	_damage_spec.set_setbycaller_magnitude(&"charge_time", 1.7)
 	var task: GASAbilityTaskDelay = GASAbilityTaskDelay.create(self, 1.5)
 	task.task_finished.connect(_on_charge_down)
 

@@ -11,6 +11,8 @@ var context: GASEffectContext
 var source_asc: GASAbilitySystemComponent
 var target_asc: GASAbilitySystemComponent
 
+var set_by_caller: Dictionary[StringName, float] = {}
+
 # 当前等级
 var level: float = 0.0
 
@@ -35,3 +37,12 @@ func resolve_all():
 	for mod_spec in modifiers:
 		if not mod_spec.resolved:
 			mod_spec.resolve(self)
+
+func set_setbycaller_magnitude(key: StringName, value: float) -> void:
+	set_by_caller[key] = value
+
+func get_setbycaller_magnitude(key: StringName, default_value: float) -> float:
+	if set_by_caller.has(key):
+		return set_by_caller[key]
+	GameLogger.warn("GameplayEffectSpec", "can't find key %s in set_by_caller" % key)
+	return default_value

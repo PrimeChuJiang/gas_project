@@ -12,6 +12,7 @@ var ge_swift_ring: GASGameplayEffect
 var ge_heal_50: GASGameplayEffect
 var ge_add_max_health: GASGameplayEffect
 var ge_add_max_mana: GASGameplayEffect
+var ge_setbycaller_damage: GASGameplayEffect
 
 var ga_fire_bolt: GAFireBoltAbility
 var ga_instance: GAInstanceTest
@@ -169,6 +170,18 @@ func _load_ge_resources() -> void:
 	ge_add_max_health = load("res://addons/gameplay_abilities_system/test/ge_add_max_health.tres")
 	ge_add_max_mana = load("res://addons/gameplay_abilities_system/test/ge_add_max_mana.tres")
 
+	# 验证4：SetByCaller——配方只声明"伤害数值由 key 'damage' 提供"，数值本身由调用方塞
+	ge_setbycaller_damage = GASGameplayEffect.new()
+	ge_setbycaller_damage.duration_policy = GASEnums.DurationPolicy.INSTANT
+	var mod = GEModifier.new()
+	mod.attr_name = &"Health"
+	mod.op = GASEnums.ModifierOp.ADD
+	var magnitude: GASModifierMagnitudeSetByCaller = GASModifierMagnitudeSetByCaller.new()
+	magnitude.data_key = &"damage"
+	magnitude.default_value = 0.0
+	mod.magnitude = magnitude
+	ge_setbycaller_damage.modifiers.append(mod)
+
 func _create_abilities() -> void:
 	var cooldown_ge = GASGameplayEffect.new()
 	cooldown_ge.duration_policy = GASEnums.DurationPolicy.DURATION
@@ -314,3 +327,21 @@ func _input(event: InputEvent):
 			test_ge_handles.append(handle)
 			old_handle = handle
 			GameLogger.info("TestScene", "get ge handle: " + str(handle))
+		"T":
+			# 验证4-正常路径：技能代码当场决定伤害是 77，塞进 spec 再 apply
+			var spec = asc.make_effect_spec(ge_setbycaller_damage)
+			spec.set_setbycaller_magnitude(&"damage", -77.0)
+			var before = attr_set.get_attribute_value(&"Health")
+			asc.apply_gameplay_effect_spec_to_self(spec)
+			var after = attr_set.get_attribute_value(&"Health")
+			assert(after == before - 77.0, "SetByCaller 伤害应为 77，实际变化：%s" % (before - after))
+			status_label.text = "状态: SetByCaller 伤害 -77"
+			print("PASS: 验证4-正常路径 (%s -> %s)" % [before, after])
+		"Y":
+			# 验证4-缺失路径：故意不塞值，期望走 default(0)、血量不变、控制台有警告
+			var before = attr_set.get_attribute_value(&"Health")
+			asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_setbycaller_damage))
+			var after = attr_set.get_attribute_value(&"Health")
+			assert(after == before, "未塞值应走 default 0 血量不变，实际变化：%s" % (before - after))
+			status_label.text = "状态: SetByCaller 未塞值（看控制台警告）"
+			print("PASS: 验证4-缺失路径 (血量不变: %s)" % after)

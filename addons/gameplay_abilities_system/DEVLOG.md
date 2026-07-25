@@ -659,3 +659,174 @@ AttributeBased 只能读**一个**属性；"伤害 = 攻击 × 暴击 − 目标
 本次提交补第 12 节复盘与验收取证）。验收 5/5 全绿，快照折算毕业照已拍（14:20:10 仍 -95）。
 下一课：MMC / SetByCaller——把 `_make_damage_spec` 里的折算公式从子类 override 挪进可配置对象，
 快照/实时做成 GE 上的 bSnapshot 开关。*
+
+---
+
+## 14. 复盘：MMC 与 SetByCaller——把公式变成数据（2026-07-25 完成）
+
+（复盘由 Claude 代笔，骨架取自用户在对话中的两次口头复述——SetByCaller 完整链路 +
+is_snapshot 时序推演，均自行讲对。这是第二次代笔，下节复盘归还用户。）
+
+### 三道思考题的最终答案
+
+- **公式归谁所有**：归**配方**（modifier）。magnitude 从 float 升级成 Resource 后，
+  公式跟着 .tres 走，策划改系数不再碰 .gd（验证 2 取证）。分层与 GE→Spec 是同一个纹理：
+  **Resource = 定义，共享、无状态；Spec = 实例，每次施放各一份**。这条纹理立刻回答了
+  本课最关键的架构问题——SetByCaller 的字典为什么必须住 spec 不能住 magnitude：
+  magnitude 是共享 Resource，两枚同时飞行的火球引用**同一个**对象，数值存它身上第二发
+  一 set 就覆盖第一发（"两枚同款戒指"论证第三次出场）。最终分工：
+  **magnitude 管"去哪读"（data_key），spec 管"存了什么"（信箱）**——配方写"取抽屉 A 的数"，
+  抽屉长在每一次施放上。
+- **snapshot 开关落在哪**：`is_snapshot()` 在这条管道里实际控制的是**"何时 resolve"**——
+  true = `GASModifierSpec._init`（即 `make_effect_spec` 时刻）当场结算；
+  false = apply 里的 `resolve_all()` 补算。target-based 的属性折算只能实时，
+  因为 `_init` 时刻 target 还不存在（第 12 节"工厂填 source、apply 填 target"的直接推论）。
+- **SetByCaller 没人喂值**：fail-open——`default_value` + `GameLogger.warn`。
+  判据（原则 5）：信箱本身存在、只是没人投递，属于"查询返回否定答案"而非"查询无法成立"；
+  与 UE 同款（default + 大声警告）。key 用 StringName，够用且与属性名同风格；
+  UE 用 GameplayTag 的层级校验优势暂不需要（记入遗留）。验证 4-Y 键对 fail 路径做了日志取证。
+
+### 落地的东西
+
+两个阶段，第一阶段在 commit `29f8f4e`，第二阶段本次提交：
+
+- **magnitude 家族**：`GASModifierMagnitude` 基类（Resource + 无状态纯函数
+  `calculate(spec) -> float`），三个子类各占一文件——ScalableFloat（裸值入家族）、
+  AttributeBased（`coefficient × (属性 + pre_add) + post_add`，带 snapshot 开关）、
+  SetByCaller（`data_key` + `default_value`，`is_snapshot` 恒 false）；
+- **GASModifierSpec 运行时账页**：持配方引用 + `resolved`/`value`，
+  `duplicate()` 改副本的旧方案退休；
+- **两条 resolve 路径**：`spec._init` 结算快照类，apply 的 `resolve_all()` 补算实时类——
+  第 12 节遗留的"快照/实时写在哪就是哪"正式变成配置开关；
+- **缝的清理**：FireBolt 删 `_make_damage_spec` override（公式进 .tres），
+  `_check_cost` 改走 `_make_cost_spec` 缝，存量 .tres 十个全部迁移；
+- **SetByCaller 三件套**：spec 信箱 `set_by_caller: Dictionary[StringName, float]`、
+  存取 API `set_setbycaller_magnitude` / `get_setbycaller_magnitude`（缺失 warn + default）、
+  `GASModifierMagnitudeSetByCaller`；
+- **验证 4 测试键**：T（塞 -77 断言生效）/ Y（不塞值断言走 default 0 + 警告）。
+
+### 这轮想通的原则
+
+- **数值按出生地分三类**：配置表里就定死的 → ScalableFloat；随角色状态变的 → AttributeBased；
+  只在本次施放过程中才产生的 → SetByCaller（蓝猫滚了多远、枪械距离衰减、蓄了多久）。
+  推论即分工纪律：**SetByCaller 传"事实"，magnitude 配"公式"，游戏逻辑永远不该知道公式长什么样**——
+  代码只报告"飞了 1700 码"，"每百码折多少伤"是策划在配方里的事。
+- **snapshot 对 SetByCaller 是范畴错误**：快照开关回答的是"数据在 t0 和 t2 都存在，读哪个时刻"——
+  攻击力有得选。SetByCaller 的值出生在 t1（t0 造 spec 之后、t2 apply 之前），
+  t0 时刻它压根不存在，"要不要快照"成了"要不要拍一张空气的照片"。
+  这就是 UE 里 SetByCaller 根本没有 snapshot 概念的原因——snapshot 是属性捕获专属的词。
+  值来得最晚，resolve 就必须选最晚的时刻。
+- **resolved 即定案，无人补救**：`resolve_all` 跳过 `resolved == true` 的账页。
+  is_snapshot=true 实验（有意为之）取证：错误时刻 resolve 会把 default 记成死账，
+  之后塞进信箱的 -77 **不是晚到，是永远被无视**——信箱里躺着值，账已在 `_init` 用 0 记完。
+  快照的本质是"过了这个时刻，后面发生什么都与我无关"，威力与危险同源。
+- **混合公式的出路**：距离×攻击力这类"事实×属性"，UE 靠第四类 CustomCalculation 打通
+  两条隔离管道；本项目基类签名 `_calculate(spec)` 拿得到完整 spec（信箱 + source_asc 属性），
+  管道天然是通的——写个子类即可。下一课的加餐。
+
+### 踩的坑
+
+- **Inspector 实验残留污染共享配方**：实验 SetByCaller 时顺手把
+  `ge_damage_base_attack.tres` 的 magnitude 存成了 SetByCaller(charge_time)，三层后果：
+  ① 第 12 节回归基线（-80/-95）被静默击穿；② 符号反转——charge_time=1.7 是正数，
+  火球变成给目标**加** 1.7 血；③ 裸事实（秒数）未经公式直接当 Health 增量，
+  正是"传事实不传公式"的反模式。git checkout 复原。教训两条：
+  **.tres 是共享事实源，实验完必须对账 git status**；
+  **配方被改过之后，此前的"验证全绿"取证全部作废**——本轮验证 1 因此重跑。
+- **防线站在解引用之后等于没有防线**：`set_setbycaller_magnitude` 那行插在了
+  `make_effect_spec` 赋值与 null 检查**之间**——若工厂返回 null，崩在防线前一行。
+  已修（塞值挪到检查之后）。null 检查的位置纪律：**第一次解引用之前**。
+
+### 验收记录
+
+| # | 用例 | 期望 | 结果 |
+|---|---|---|---|
+| 1 | 回归基线（29f8f4e 当轮） | 行为一个数不变 | ✓ -80 / -95 / 快照 -110 |
+| 2 | 策划工作流：只改 .tres 系数 | 伤害变 -100 | ✓ 不碰 .gd |
+| 3 | 翻 snapshot 开关重跑毕业照 | 实时读到新值 | ✓ -125 |
+| 4-T | SetByCaller 塞 -77 | 血量 -77 | ✓ 断言过 |
+| 4-Y | 不塞值 | default 0 + 控制台警告 | ✓ 血量不动，警告在案 |
+| 附 | is_snapshot=true 反证实验 | T 键失效、只捞 default+警告 | ✓ 断言炸，符合推演 |
+| 附 | .tres 复原后 #1 复跑 | -80/-95 回归 | ✓ 用户确认 |
+
+取证说明：本节验收粒度不如第 12 节——#1 复跑与 4-T/4-Y 为口头确认，未存档带时间戳的
+控制台日志。按"不可观察的状态等于没测"的标准这是欠账，记入遗留；数字本身经逐项对账无疑点。
+
+### 遗留
+
+- FireBolt `activate` 里 `set_setbycaller_magnitude(&"charge_time", 1.7)` 现为死代码
+  （配方复原后无人读此 key）——**故意留下**，下一课加餐直接把它变活；
+- 测试文件 docstring 里旧 float magnitude 示例待清；
+- SetByCaller 的 key 用 StringName 未用 tag——等 tag 校验有真实需求再换；
+- 本节验收欠一份带时间戳的日志存档；
+- AttributeBased 只能读一个属性——ExecutionCalculation 课的正题。
+
+---
+
+## 15. 下一课：ExecutionCalculation——多属性攻防结算（加餐先行：第四类 magnitude）
+
+### 问题本质
+
+modifier 管道的形状是**"算一个数，改一个属性"**：一条 modifier 读若干输入、产出一个
+magnitude、以一种 op 写一个属性。三类 magnitude 只是"这个数怎么来"的三种答案，
+形状本身没变。但真实的攻防结算长这样：
+
+> 伤害 = (攻击 × (1 + 暴击率 × 暴击伤害) − 目标护甲) × 属性克制系数
+
+读**源的三个**属性、读**目标的一个**属性、混合快照与实时、可能同时写 Health 和
+附带一个吸血写源的 Health——这个形状塞不进任何 magnitude。UE 的答案：
+`UGameplayEffectExecutionCalculation`——GE 上挂一个**执行类**，声明要捕获哪些属性
+（RelevantAttributesToCapture），apply 时刻一次算完，可产出**多条** modifier。
+一句话：**magnitude 是"一个数的公式"，execution 是"一次结算的公式"**。
+
+### 加餐先行（半小时量级）
+
+第 13 节放弃的第四类 CustomCalculationClass 先补上：写 `GASModifierMagnitudeChargeDamage`
+（名字自定），`_calculate(spec)` 里读信箱的 `charge_time` × 从 source 捕获的 Attack ×
+`@export` 系数——FireBolt 里那行死代码就地复活。做完你会亲手证明两件事：
+① `_calculate(spec)` 签名下信箱与属性两条管道本来就是通的；
+② 它和 execution 的差距只剩"读目标属性"和"写多个属性"——正课的动机自然浮现。
+
+### 动手前必想的思考题
+
+1. **execution 和 magnitude 的边界**：都是"代码算数"，为什么要两个概念？
+   如果给 magnitude 加上"能读目标"，它能取代 execution 吗？
+   （提示：一条 modifier 只有一个 op、一个 attr_name——吸血"写两个人的 Health"卡在哪一层？）
+2. **捕获声明是代码还是数据**：execution 要读 Attack/CritChance/目标 Armor，
+   "我要读什么"写死在 `_calculate` 里，还是像 UE 一样声明成列表交给系统？
+   声明换来了什么？（提示：系统不知道你的依赖，就无法帮你做快照捕获，
+   更无法在 Stacking/聚合课里做"依赖变了要重算"。）
+3. **目标属性在哪个时刻才可读**：execution 必须等 apply（第 12 节结论的又一次复用）。
+   那 DURATION + period 的 DoT 呢——每跳都重新执行一遍吗？源的 Attack 捕获快照、
+   目标的 Armor 每跳实时，**同一次结算里混两种时序**，账怎么记？
+
+### 实现路线提示（顺序即依赖）
+
+1. 加餐（自定义 magnitude 子类）先做，热身 + 立靶子；
+2. 测试场景先立**木桩**：第二个角色挂 ASC + Armor 属性——目前测试全是
+   `apply_to_self`，攻防结算逼着源/目标真正分家（EffectContext 终于双向都有戏份）；
+3. `GASExecutionCalculation` 基类（Resource，虚函数拿 spec 算出"输出集合"）；
+   GE 上加挂载点；apply 管道里给它一个执行时刻——想清楚它和 modifiers 数组的
+   执行顺序谁先谁后；
+4. 输出怎么表达："一组 (attr_name, op, magnitude)" 的临时 modifier？
+   直接改属性？想想哪种走法能复用现有的 modifier 结算管道；
+5. 第一个真实用例：`伤害 = 攻击 − 目标护甲`（先别上暴击，两个属性先把管道打通），
+   验证改木桩 Armor 伤害跟着变。
+
+### 验证目标
+
+1. 加餐：蓄力 1.7s 火球伤害 = charge_time × 系数 × Attack，改系数只动 .tres/Inspector；
+2. 木桩回归：对木桩施放现有火球，-80/-95 基线在"真目标"身上重现（source≠target 首次取证）；
+3. 攻防结算：`攻击 100 − 护甲 20 = -80`，只改木桩 Armor（20→50），伤害变 -50；
+4. 时序专项：DoT 版攻防结算，中途给木桩上护甲 buff——每跳实时读 Armor 的证据。
+
+### 更远的门
+
+execution 产出的 modifier 与常驻 modifier 如何合账（多个 buff 同时改 Attack 谁说了算）——
+聚合器（Aggregator）；同一 GE 叠加 N 层——Stacking。都在 execution 之后排队。
+
+---
+
+*本轮结束时代码状态：SetByCaller 三件套 + 验证 4 + is_snapshot 反证实验完毕，
+MMC 课全部验证目标达成，本次提交关账（含第 14 节复盘）。charge_time 死代码故意留作
+下一课加餐的靶子。下一课：ExecutionCalculation 多属性攻防结算，加餐 CustomCalculation 先行。*
