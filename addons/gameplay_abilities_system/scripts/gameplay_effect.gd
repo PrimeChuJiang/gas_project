@@ -10,8 +10,11 @@ extends Resource
 # 周期性间隔 (0.0 = 不周期)
 @export var period: float = 0.0
 
-# 修改器列表，元素为Dictionary:{attr_name: StringName, op: ModifierOp, magnitude: float}
+# GEModifier修改器列表
 @export var modifiers: Array[GEModifier] = []
+
+# GASExecutionCalculation执行器
+@export var executions: Array[GASExecutionCalculation] = []
 
 # 效果自身标签
 @export var asset_tags: FGameplayTagContainer = FGameplayTagContainer.new()

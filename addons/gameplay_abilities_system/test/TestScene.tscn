@@ -11,33 +11,60 @@ script = ExtResource("1_xpkb0")
 
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=811854151]
 
-[node name="VBoxContainer" type="VBoxContainer" parent="CanvasLayer" unique_id=1249261018]
-anchors_preset = -1
-anchor_left = 0.5
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = -50.0
-offset_right = 50.0
-grow_horizontal = 2
-grow_vertical = 2
+[node name="HBoxContainer" type="HBoxContainer" parent="CanvasLayer" unique_id=1307700835]
+offset_right = 40.0
+offset_bottom = 40.0
 
-[node name="HealthLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=2081026051]
+[node name="VBoxContainer" type="VBoxContainer" parent="CanvasLayer/HBoxContainer" unique_id=1249261018]
 layout_mode = 2
 
-[node name="MaxHealthLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=576013526]
+[node name="HealthLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer" unique_id=2081026051]
 layout_mode = 2
 
-[node name="ManaLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=867600538]
+[node name="MaxHealthLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer" unique_id=576013526]
 layout_mode = 2
 
-[node name="MaxManaLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=1168742517]
+[node name="ManaLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer" unique_id=867600538]
 layout_mode = 2
 
-[node name="AttackLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=1876325470]
+[node name="MaxManaLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer" unique_id=1168742517]
 layout_mode = 2
 
-[node name="StatusLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=1143572196]
+[node name="ArmorLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer" unique_id=1540011599]
 layout_mode = 2
 
-[node name="TagLabel" type="Label" parent="CanvasLayer/VBoxContainer" unique_id=1514353870]
+[node name="AttackLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer" unique_id=1876325470]
+layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer" unique_id=1143572196]
+layout_mode = 2
+
+[node name="TagLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer" unique_id=1514353870]
+layout_mode = 2
+
+[node name="VBoxContainer2" type="VBoxContainer" parent="CanvasLayer/HBoxContainer" unique_id=1390855303]
+layout_mode = 2
+
+[node name="NPCHealthLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer2" unique_id=1443992202]
+layout_mode = 2
+
+[node name="NPCMaxHealthLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer2" unique_id=41642197]
+layout_mode = 2
+
+[node name="NPCManaLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer2" unique_id=806386652]
+layout_mode = 2
+
+[node name="NPCMaxManaLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer2" unique_id=998274315]
+layout_mode = 2
+
+[node name="NPCArmorLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer2" unique_id=672302798]
+layout_mode = 2
+
+[node name="NPCAttackLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer2" unique_id=665571238]
+layout_mode = 2
+
+[node name="NPCStatusLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer2" unique_id=1274618995]
+layout_mode = 2
+
+[node name="NPCTagLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer2" unique_id=1782683753]
 layout_mode = 2

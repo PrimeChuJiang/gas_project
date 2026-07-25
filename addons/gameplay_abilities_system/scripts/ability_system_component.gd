@@ -42,6 +42,24 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 			var attr_set : GASAttributeSet = _find_attribute_set(mod.attr_name)
 			if attr_set != null:
 				attr_set.apply_base_value_change(mod.attr_name, mod.get_magnitude())
+		for exec in spec.effect_def.executions:
+			var exec_array:Array[GASModifierEvaluatedData] = exec._execute(spec)
+			if exec_array:
+				for mod_eval in exec_array:
+					if mod_eval.op != GASEnums.ModifierOp.ADD:
+						GameLogger.error("GameAbilitySystemComponent", "executions_calculation only support Add op !")
+						continue
+					var attr_set: GASAttributeSet = null
+					match mod_eval.receiver:
+						GASEnums.Receiver.TARGET:
+							attr_set = _find_attribute_set(mod_eval.attr_name)
+						GASEnums.Receiver.SOURCE:
+							if spec.source_asc:
+								attr_set = spec.source_asc.find_attribute_set(mod_eval.attr_name)
+							else:
+								GameLogger.error("GameAbilitySystemComponent", "source_asc in spec is null!")
+					if attr_set != null:
+						attr_set.apply_base_value_change(mod_eval.attr_name, mod_eval.value)
 		for attr_set in _attribute_sets:
 			attr_set.post_gameplay_effect_execute(spec)
 		return INVALID_HANDLE
@@ -53,11 +71,22 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 			if attr_set != null:
 				if spec.period == 0:
 					attr_set.apply_modifier(mod.attr_name, handle, mod.op, mod.get_magnitude())
+		if not spec.effect_def.executions.is_empty():
+			GameLogger.warn("GameAbilitySystemComponent", "execution only support INSTANT type")
 		_active_effects.append({"handle": handle, "spec": spec, "remaining_time": spec.duration, "granted_tags":spec.effect_def.granted_tag, "period_timer": spec.period})
 		for tag in spec.effect_def.granted_tag._tags:
 			_add_owned_tag(tag)
 		return handle
 	return INVALID_HANDLE
+
+func apply_gameplay_effect_spec_to_target(spec: GASEffectSpec, target_asc: GASAbilitySystemComponent) -> int:
+	if not spec : 
+		GameLogger.error("GameAbilitySystemComponent", "spec is null!")
+		return INVALID_HANDLE
+	if not target_asc:
+		GameLogger.error("GameAbilitySystemComponent", "target asc is null!")
+		return INVALID_HANDLE
+	return target_asc.apply_gameplay_effect_spec_to_self(spec)
 
 func remove_active_effect(handle: int) -> bool:
 	for entry in _active_effects:

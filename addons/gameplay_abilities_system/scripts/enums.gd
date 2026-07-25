@@ -15,3 +15,9 @@ enum ModifierOp{
 	DIVIDE,
 	OVERRIDE
 }
+
+# 计算结果收件人
+enum Receiver{
+	SOURCE,
+	TARGET
+}
