@@ -42,24 +42,7 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 			var attr_set : GASAttributeSet = _find_attribute_set(mod.attr_name)
 			if attr_set != null:
 				attr_set.apply_base_value_change(mod.attr_name, mod.get_magnitude())
-		for exec in spec.effect_def.executions:
-			var exec_array:Array[GASModifierEvaluatedData] = exec._execute(spec)
-			if exec_array:
-				for mod_eval in exec_array:
-					if mod_eval.op != GASEnums.ModifierOp.ADD:
-						GameLogger.error("GameAbilitySystemComponent", "executions_calculation only support Add op !")
-						continue
-					var attr_set: GASAttributeSet = null
-					match mod_eval.receiver:
-						GASEnums.Receiver.TARGET:
-							attr_set = _find_attribute_set(mod_eval.attr_name)
-						GASEnums.Receiver.SOURCE:
-							if spec.source_asc:
-								attr_set = spec.source_asc.find_attribute_set(mod_eval.attr_name)
-							else:
-								GameLogger.error("GameAbilitySystemComponent", "source_asc in spec is null!")
-					if attr_set != null:
-						attr_set.apply_base_value_change(mod_eval.attr_name, mod_eval.value)
+		_run_executions(spec)
 		for attr_set in _attribute_sets:
 			attr_set.post_gameplay_effect_execute(spec)
 		return INVALID_HANDLE
@@ -72,7 +55,8 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 				if spec.period == 0:
 					attr_set.apply_modifier(mod.attr_name, handle, mod.op, mod.get_magnitude())
 		if not spec.effect_def.executions.is_empty():
-			GameLogger.warn("GameAbilitySystemComponent", "execution only support INSTANT type")
+			if spec.period <= 0:
+				GameLogger.warn("GameAbilitySystemComponent", "execution only support \"period > 0\" type")
 		_active_effects.append({"handle": handle, "spec": spec, "remaining_time": spec.duration, "granted_tags":spec.effect_def.granted_tag, "period_timer": spec.period})
 		for tag in spec.effect_def.granted_tag._tags:
 			_add_owned_tag(tag)
@@ -176,6 +160,7 @@ func _apply_periodic_effect(entry: Dictionary) -> void:
 		var attr_set = _find_attribute_set(mod.attr_name)
 		if attr_set != null:
 			attr_set.apply_base_value_change(mod.attr_name, mod.get_magnitude())
+	_run_executions(spec)
 	for attr_set in _attribute_sets:
 		attr_set.post_gameplay_effect_execute(spec)
 
@@ -226,3 +211,23 @@ func _cancel_active_abilities_with_tag(tag: FGameplayTag):
 			if tag.matches_tag(ability_tag):
 				cancel_ability(ability)
 				break
+
+func _run_executions(spec: GASEffectSpec) -> void:
+	for exec in spec.effect_def.executions:
+		var exec_array:Array[GASModifierEvaluatedData] = exec._execute(spec)
+		if exec_array:
+			for mod_eval in exec_array:
+				if mod_eval.op != GASEnums.ModifierOp.ADD:
+					GameLogger.error("GameAbilitySystemComponent", "executions_calculation only support Add op !")
+					continue
+				var attr_set: GASAttributeSet = null
+				match mod_eval.receiver:
+					GASEnums.Receiver.TARGET:
+						attr_set = _find_attribute_set(mod_eval.attr_name)
+					GASEnums.Receiver.SOURCE:
+						if spec.source_asc:
+							attr_set = spec.source_asc.find_attribute_set(mod_eval.attr_name)
+						else:
+							GameLogger.error("GameAbilitySystemComponent", "source_asc in spec is null!")
+				if attr_set != null:
+					attr_set.apply_base_value_change(mod_eval.attr_name, mod_eval.value)

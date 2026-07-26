@@ -830,3 +830,133 @@ execution 产出的 modifier 与常驻 modifier 如何合账（多个 buff 同�
 *本轮结束时代码状态：SetByCaller 三件套 + 验证 4 + is_snapshot 反证实验完毕，
 MMC 课全部验证目标达成，本次提交关账（含第 14 节复盘）。charge_time 死代码故意留作
 下一课加餐的靶子。下一课：ExecutionCalculation 多属性攻防结算，加餐 CustomCalculation 先行。*
+
+---
+
+## 16. 复盘：ExecutionCalculation——多属性攻防结算与 DoT 实时结算（2026-07-26 完成）
+
+（骨架 Claude 搭，思考题答案与坑的心理现场取自用户口头复述、Claude 誊写。
+第 1 题口头版把 execution 和 magnitude 的方向说反了一次，纠正记录在正文——
+这正是复盘该抓的东西。）
+
+### 三道思考题的最终答案
+
+- **execution 和 magnitude 的边界在产出端宽度**。两个函数签名就是判决书：
+  `calculate(spec) -> float` 返回**一个数**，塞进**一条** modifier 的坑位——一个
+  attr_name、一个 op，写谁由 apply 决定，这才是"单值、单方向"；
+  `_execute(spec) -> Array[GASModifierEvaluatedData]` 返回**一摞小票**，每张自带
+  receiver（TARGET/SOURCE）、attr_name、op、value——多值、多方向。吸血卡在 magnitude 的
+  **产出端**：就算开放读目标，返回值也只有一个 float、一个坑位，"源也要回血"的第二笔账
+  没有座位。边界不在读端——加餐的第四类 magnitude 已证明信箱与属性两条读管道本来就通。
+  （口头复述时两词说反，被签名当场纠正。）
+- **捕获声明买的是"系统看得见你的依赖"**。声明成数据（挂在配方上的列表）而非硬读在
+  `_calculate` 里，换来两样：① 系统能替你**逐个依赖**在正确时刻拍快照——`is_snapshot`
+  开关就是最小号的捕获声明；② 失效重算的入场券——聚合器课里 DURATION 的 magnitude
+  依赖 Attack，Attack 变了系统得知道找谁重算，读死在代码里系统是瞎的。一句话：
+  **声明住配方，捕获值住账页**。本项目 execution 目前硬读（UE 的
+  RelevantAttributesToCapture 未做），记入遗留。
+- **同一次结算混两种时序不乱，是因为住址不同**。快照值在 `make_effect_spec` 时刻
+  结算进 spec，跟着 spec 飞两秒也不变；实时值每跳 `_execute` 现场从属性集读。
+  DoT 的每一跳都是**完整重跑一遍配方**，把"t0 的账"和"这一跳的现场"混合——
+  本轮实测 Armor 中途变、下一跳立即变，就是"现场读"的取证。要快照哪个输入，
+  在 spec 里预折算即可，机制已备。**引擎给确定性（每跳同一执行时刻、快照值恒定），
+  语义归配方（哪个输入走哪种时序是配方作者的声明）。**
+
+### 落地的东西
+
+两个阶段，第一阶段在 commit `e1e1d7d`，DoT 站本次提交：
+
+- **加餐**：`GASModifierMagnitudeSetByCallerTimesAttribute`（第四类 CustomCalculation，
+  信箱 charge_time × source Attack × `@export` 系数，is_snapshot 恒 false）+
+  `ge_damage_charge.tres`——FireBolt 里躺了两课的 charge_time 死代码复活；
+- **木桩**：test 场景第二角色 npc（asc_npc + 完整 TestAttributeSet + Armor），
+  source/target 首次真正分家，EffectContext 双向都有了戏份；
+- **`apply_gameplay_effect_spec_to_target`**：空检查 + 一行转发
+  `target_asc.apply_..._to_self(spec)`——第一版复制了 25 行双漏斗被重写，
+  两份漏斗必然分叉，转发壳只此一家；
+- **`GASModifierEvaluatedData` 小票**：receiver / attr_name / op / value——
+  配方只开票，落账归 ASC；execution 与结算管道之间的唯一通货；
+- **`GASExecutionCalculation` 基类**（Resource，`_execute(spec)` 虚函数）+
+  GE 的 `executions` 独立挂载点，与 modifiers 数组并列；
+- **执行时刻法条**：INSTANT 分支 modifiers 之后、post_execute 之前；周期跳里
+  modifiers 之后、post_execute 之前（与 INSTANT 同构）；period <= 0 的
+  DURATION/INFINITE 拒收 executions（warn + 忽略，判决理由见原则第一条）；
+  执行顺序定死 modifiers 先 executions 后，跟 UE；
+- **`_run_executions(spec)` 漏斗**：INSTANT 与周期跳两个调用点才抽（一处不抽的纪律）；
+  参数就一个 spec，因为落账要的三样东西都在它身上——executions 列表、`_execute` 的
+  入参、SOURCE 行跨墙用的 source_asc。"spec 啥都能拿到"不是理由，逐项点名才是；
+- **三个测试键**：O（INSTANT 攻防结算）、P（`ge_dot_execution`：DURATION 5.01s +
+  period 0.5s + modifiers 空 + 只挂 execution，UE 伤害 GE 标准形态的 DoT 版）、
+  A（`ge_add_armor`：DURATION 1s 的 +10 护甲 buff，对照实验的手术刀）。
+
+### 这轮想通的原则
+
+- **幽灵 modifier 判决书**：DURATION 挂 execution 被拒，是因为聚合器式 modifier 用
+  target 的 handle 记账，SOURCE 行会把 modifier 写进别人家的 AttributeSet，而
+  `_cleanup_effect` 只扫自己家——到期清不掉。周期跳合法，是因为每跳走
+  `apply_base_value_change` 一次性落账，写完就完，案发条件不存在。
+  **同一个功能，换一种落账方式，罪名就不成立。**
+- **apply 时刻 ≠ 落账时刻**：周期 GE 在 apply 时只入册（`_active_effects` 登记簿），
+  第一跳在 period 秒后由 `_process` 心跳触发。INSTANT 养出的"apply 是唯一入口"直觉
+  在这里是陷阱——动笔前先问：**这个 GE 的落账时刻在哪。**
+- **账本唯一出处**：同一个判断全项目只认一个字段。`spec.period` 是 resolve 后的
+  运行时账页，`spec.effect_def.period` 是配方原件——混用则将来 spec 级改写
+  （急速缩短跳间隔）时读错账。
+- **名实相符**：`_calc_evaluated_data` 改名 `_run_executions`——"calc"暗示纯计算
+  无副作用，而它跑配方、改属性、落账满地。读名字就该知道它会动属性。
+- **假口供**：warn 文案第一版写成 "only support period == 0"，与新法条正好相反。
+  错误日志是给凌晨三点的自己看的证词，方向写反比不写更害人。
+- **对照实验的数值设计**：三段各要一个独一无二的数字（-20 / -10 / -20 弹回），
+  两个假设才会预测不同结果。护甲 buff 若 +40 会触发白卷条款归零，而"每跳 0"和
+  "DoT 停了"在日志上同貌——实验设计要避开歧义读数。
+
+### 踩的坑
+
+1. **execution 放进了 DURATION 的 apply 分支**。现场：DoT 只在 apply 瞬间结算一次，
+   之后每跳血不动。心理现场（最值钱）：忘了 DURATION 走 `_process` 主动调用，
+   顺着"apply 是唯一入口"的惯性放到了最直接的地方。修法：调用移入
+   `_apply_periodic_effect`，apply 分支只留 warn。新反射见原则第二条。
+2. **`ge_add_armor.tres` 忘设 duration_policy**。现场：Armor 80→90→100→110→120
+   单调上涨永不回落，最后两次 P 全场静默。诊断：没写就吃默认值 INSTANT，
+   +10 直接写进 base value——根本不是 buff，是永久改造；护甲焊到 120 ≥ Attack 后
+   每跳交白卷，无变化即无日志。教训：**.tres 里没写的字段也是配置**，
+   INSTANT 是本插件 GE 的缺省人格；以及白卷静默与"DoT 坏了"同貌，见原则第六条。
+3. **warn 文案说反**（假口供，见原则第五条）；顺手堵了 period 负数静默滑过的缝
+   （条件 `== 0` 改 `<= 0`）。
+4. **第一阶段的复制粘贴三连**（e1e1d7d 当轮）：npc 的 attr_set 认错主人
+   （asc→asc_npc）、tag 信号接错、npc handler 刷错 label——复制成对出现的代码，
+   错也成对出现。
+
+### 验收记录
+
+| # | 用例 | 期望 | 结果 |
+|---|---|---|---|
+| 1 | 加餐三连（e1e1d7d 当轮） | 蓄力 -85 / 改系数 -170 / is_snapshot=true 反证 warn 提前两秒 | ✓ |
+| 2 | 木桩回归 I 键 | -80 在真目标重现；npc Attack=50 差异化仍 -80（读 source） | ✓ |
+| 3 | O 键 INSTANT 攻防 | Armor 50/-50、80/-20、120/0 血不动；差异化证明读 target | ✓ |
+| 4 | O 键漏斗抽取后回归 | 三连一个数不变（重构安检门） | ✓ |
+| 5 | DoT 基线 | 每跳 -20 × 2 | ✓ |
+| 6 | 中途上甲 | 上甲后**下一跳**立即 -10（快照假设预测 -20 不变，死刑一） | ✓ |
+| 7 | 到期弹回 | buff 1s 后每跳弹回 -20 × 6，Armor 回 80（快照假设预测 -10 继续，死刑二） | ✓ |
+| 附 | 总账 | 总伤 180 = 500−320；10 跳 = 5.01s ÷ 0.5s，一跳不丢 | ✓ |
+| 附 | 到期现场 | "血不动、Armor 90→80"单独成行 = `_cleanup_effect` 摘聚合器 modifier 的铁证 | ✓ |
+| 附 | 侦探记 | 第一轮"消失的第 10 跳"实为白卷（当时 Armor 100 = Attack 100）；账能对平 | ✓ |
+
+取证说明：本节 DoT 实验留了带时间戳的完整控制台日志（20:48 一轮），
+补上了第 14 节"验收欠日志存档"的欠账。
+
+### 遗留
+
+- INSTANT 结算无视 op 的旧债（modifier 循环同罪）——聚合器课一并清算；
+- execution 目前 ADD-only（非 ADD error + continue）、捕获声明未做
+  （RelevantAttributesToCapture）——都是聚合器课解禁的门；
+- warn 文案还欠半句后果说明（executions ignored）；
+- 测试 docstring 旧 float 示例待清；GameplayTagsManager 启动日志
+  "加载 6 个/注册总数 0"两行打架待查；
+- 下一课排队：聚合器（Aggregator）→ Stacking → GameplayCue。
+
+---
+
+*本轮结束时代码状态：ExecutionCalculation 课全部验证目标达成（含第 15 节验证目标 4 的
+DoT 时序专项），本次提交关账（含第 16 节复盘）。下一课：聚合器（Aggregator）——
+execution 产出的 modifier 与常驻 modifier 如何合账，op 旧债与 ADD-only 限制届时清算。*

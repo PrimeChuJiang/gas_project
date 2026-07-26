@@ -15,6 +15,8 @@ var ge_add_max_mana: GASGameplayEffect
 var ge_setbycaller_damage: GASGameplayEffect
 var ge_damage_charge: GASGameplayEffect
 var ge_attack_vs_armor: GASGameplayEffect
+var ge_dot_execution: GASGameplayEffect
+var ge_add_armor: GASGameplayEffect
 
 var ga_fire_bolt: GAFireBoltAbility
 var ga_instance: GAInstanceTest
@@ -197,7 +199,9 @@ func _load_ge_resources() -> void:
 	ge_add_max_mana = load("res://addons/gameplay_abilities_system/test/ge_add_max_mana.tres")
 	ge_damage_charge = load("res://addons/gameplay_abilities_system/test/ge_damage_charge.tres")
 	ge_attack_vs_armor = load("res://addons/gameplay_abilities_system/test/ge_damage_attack_vs_armor.tres")
-
+	ge_dot_execution = load("res://addons/gameplay_abilities_system/test/ge_dot_execution.tres")
+	ge_add_armor = load("res://addons/gameplay_abilities_system/test/ge_add_armor.tres")
+	
 	# 验证4：SetByCaller——配方只声明"伤害数值由 key 'damage' 提供"，数值本身由调用方塞
 	ge_setbycaller_damage = GASGameplayEffect.new()
 	ge_setbycaller_damage.duration_policy = GASEnums.DurationPolicy.INSTANT
@@ -420,3 +424,9 @@ func _input(event: InputEvent):
 		"O":
 			var spec = asc.make_effect_spec(ge_attack_vs_armor)
 			asc.apply_gameplay_effect_spec_to_target(spec, asc_npc)
+		"P":
+			var spec = asc.make_effect_spec(ge_dot_execution)
+			asc.apply_gameplay_effect_spec_to_target(spec, asc_npc)
+		"A":
+			var spec = asc_npc.make_effect_spec(ge_add_armor)
+			asc_npc.apply_gameplay_effect_spec_to_self(spec)

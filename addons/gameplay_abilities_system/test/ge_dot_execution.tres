@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="GASGameplayEffect" format=3 uid="uid://bf23x6ghtvoj8"]
+
+[ext_resource type="Script" uid="uid://c6vfd5x4ybmyw" path="res://addons/gameplay_abilities_system/scripts/execution_calculation/gameplay_execution_calculation.gd" id="1_c66e8"]
+[ext_resource type="Script" uid="uid://b3pkndbfe856g" path="res://addons/gameplay_abilities_system/test/test_execution_attack_vs_armor.gd" id="2_bsdr1"]
+[ext_resource type="Script" uid="uid://defg8fw8hdubq" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_modifier.gd" id="3_b8i0p"]
+[ext_resource type="Script" uid="uid://bmi3sw3w3ymx8" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect.gd" id="4_qjulr"]
+
+[sub_resource type="Resource" id="Resource_wk48e"]
+script = ExtResource("2_bsdr1")
+metadata/_custom_type_script = "uid://b3pkndbfe856g"
+
+[resource]
+script = ExtResource("4_qjulr")
+duration_policy = 1
+duration = 5.01
+period = 0.5
+executions = Array[ExtResource("1_c66e8")]([SubResource("Resource_wk48e")])
+metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"
