@@ -960,3 +960,142 @@ MMC 课全部验证目标达成，本次提交关账（含第 14 节复盘）。
 *本轮结束时代码状态：ExecutionCalculation 课全部验证目标达成（含第 15 节验证目标 4 的
 DoT 时序专项），本次提交关账（含第 16 节复盘）。下一课：聚合器（Aggregator）——
 execution 产出的 modifier 与常驻 modifier 如何合账，op 旧债与 ADD-only 限制届时清算。*
+
+---
+
+## 17. 下一课：聚合器（Aggregator）——三本账并成一本
+
+### 热身清理（开工前的小活）
+
+- warn 文案补上后果半句（"executions ignored"，第 16 节遗留）；
+- 测试文件 docstring 里旧 float magnitude 示例清掉（拖了两课的账）；
+- GameplayTagsManager 启动日志"加载 6 个/注册总数 0"两行打架——查清哪行在撒谎。
+
+### 问题本质
+
+同一个问题——**"一摞 (op, magnitude) 怎么变成一个数"**——现在有三种答案，散在三个地方：
+
+- **常驻 modifier**（DURATION/INFINITE，period == 0）：`GASAttributeDATA._evaluate()`，
+  认 op、有定序（OVERRIDE 短路 → ADD → MULTIPLY → DIVIDE）——它其实**已经是聚合器的胚胎**；
+- **INSTANT 与周期跳**：`apply_base_value_change(attr, delta)`，op 完全无视，
+  一律当 ADD 落账（第 16 节遗留的头号旧债）——配一条 MULTIPLY -0.5 想砍半血，
+  实际效果是给血量 -0.5；
+- **execution 小票**：ADD-only，非 ADD error + continue 硬性拒收。
+
+三处对不上账的后果：Inspector 里能配出四种 op，其中三种只在一种 duration_policy
+下有效，且失效方式是**静默算错**而非报错——比崩溃更害人的那一种。
+本课干的事一句话：**全项目只留一个"怎么合账"的权威，其余调用点全部走它**。
+UE 对照：`FAggregator::EvaluateWithBase`（现值聚合）、
+`StaticExecModOnBaseValue`（INSTANT 按 op 语义改 base）。
+
+第二阶段捎带解禁第 16 节的另一扇门：**捕获声明与依赖重算**。
+is_snapshot=false 号称"实时"，其实只实时到 apply 时刻——`resolve_all` 折算一次后
+value 定案，之后源属性再变也无人过问（DoT 每跳实时是因为**每跳重跑配方**，
+不是账页会自己更新）。挂在 DURATION 上的"Armor += 30% source Attack"要真正实时，
+系统必须知道"这条 modifier 依赖谁"——第 16 节答案 2 预言的兑现时刻：
+**声明住配方，捕获值住账页**，捕获声明从锦上添花变成必需品。
+
+### 动手前必想的思考题
+
+1. **base 上的 MULTIPLY 是什么意思**：INSTANT 的 ×1.5 与 DURATION 的 ×1.5，
+   到期后的世界不一样——前者永久改写 base 覆水难收，后者是到期退租的租约。
+   UE 为什么给 INSTANT 单开 `StaticExecModOnBaseValue`，而不是复用现值聚合那套？
+   顺带回答定序问题：+50 和 ×1.2 同时挂在 Attack 上，"先加后乘"是谁规定的、
+   凭什么——策划想要"先乘后加"怎么办？（UE 的答案叫 channel，看懂它再决定
+   做不做——第 13 节"看完就知道为什么放弃"的判断可能再次适用。）
+2. **信号已经在发，缺的是什么**：`attribute_changed` 三个出口（改 base、挂 modifier、
+   摘 modifier）都已在发，且白卷不发（current 没变就不 emit）。那依赖重算还缺什么？
+   （提示：缺的不是广播，是**听者**和**登记簿**——Attack 变了，系统怎么知道该找
+   哪条 modifier 重算？更扎手的：依赖的属性在 source 家、账页挂在 target 家，
+   信号线**跨墙**怎么拉？buff 到期时谁负责拆线——忘拆的听者和 Task 尸体
+   （第 1 节 Bug 2）是不是同一个罪名？）
+3. **重算是推翻定案还是记新账**：第 14 节立过"resolved 即定案，无人补救"，
+   依赖重算却要求 Attack 变化后 magnitude 重新 calculate——两条原则打架吗？
+   （提示：想清楚定案的是**哪一层**的账——spec 里的快照值，和聚合器里那条
+   modifier 的 magnitude，是不是同一本账？另：A 依赖 B、B 依赖 A 的环，
+   第一课要不要处理？至少要不要**看得见**？）
+
+### 实现路线提示（顺序即依赖）
+
+1. **先抽不改**：把 `_evaluate()` 的合账逻辑抽成独立的静态纯函数
+   （输入 base + modifier 列表，输出 float），`current_value` 改走它——
+   重构安检门：全部现有测试键一个数不变；
+2. **op 债清算**：写"按 op 语义改 base"的静态结算（同一权威的第二个入口：
+   ADD 加、MULTIPLY 乘、OVERRIDE 覆写……），INSTANT 分支、周期跳、execution 落账
+   三处调用点全部接上——ADD-only 哨兵自然拆除。三处一个漏斗，纪律同 `_run_executions`；
+3. **依赖登记簿**（第二阶段）：捕获声明成数据挂在配方上；apply 时按声明登记
+   "谁依赖谁"、连上 `attribute_changed`；属性变了 → 找到受影响的 modifier 重新
+   calculate → 更新聚合器里的 magnitude → 属性 dirty → 信号级联。
+   **注销与登记必须对称**（`_cleanup_effect` 加一笔拆线的账，温习 tag 引用计数）；
+4. **真实用例立靶**：`ge_buff_armor_from_attack`（DURATION，Armor += 30% source
+   Attack，is_snapshot=false）——注意它同时踩中"跨墙依赖"和"实时重算"两个点，
+   一个靶子验两件事。
+
+### 验证目标
+
+1. **回归即基线**：现有测试键全数重跑（O/P/A 三连、I 木桩、T/Y 信箱……），
+   一个数不变——第 1、2 步对已有行为是纯重构；
+2. **op 债清算取证**：INSTANT 的 MULTIPLY 配方（-0.5 砍半血）——旧管道预测血 -0.5、
+   新管道预测血减半，同一配方两种预测**数字天然岔开**（第 16 节对照实验
+   数值设计原则的直接复用）；
+3. **execution 非 ADD**：一张非 ADD 小票走通落账，用例自选；
+4. **依赖重算两段对照**：Armor buff 挂着时给源上 Attack buff，target 的 Armor
+   现值**立即**跟涨；Attack buff 到期，Armor 跟着回落——"apply 时刻定死"假设的
+   两次死刑，第 16 节同款实验设计；
+5. **拆线取证**：Armor buff 先到期、之后再改 Attack——Armor 纹丝不动且**无重算日志**，
+   证明登记簿注销干净（尸体听者的反证实验）。
+
+### 更远的门
+
+聚合器管"多条 modifier 改同一属性怎么合账"；同一个 GE 自己叠 N 层怎么记
+——层数、上限、刷新策略——是 Stacking 的活（连按 2 无限叠 buff 的已知问题届时正法）。
+完整排期见第 18 节路线图。
+
+---
+
+## 18. 教学路线图（2026-07-31 制定）
+
+第 6 节旧路线图六条已清四条（打断 → 第 9-10 节；EffectContext → 第 11-12 节，
+并延伸出 MMC 第 13-14 节与 Execution 第 15-16 节两课）。余下课程按依赖关系重排如下。
+路线图是地图不是铁轨——每课复盘的遗留可以插队，顺序只锁"梯队内"，不锁"梯队间"。
+
+### 第一梯队：结算深水区（顺序即依赖）
+
+1. **聚合器（Aggregator）**——第 17 节已备课。合账权威唯一化 + op 旧债清算 +
+   捕获声明与依赖重算；
+2. **Stacking**——同一 GE 叠 N 层：层数上限、到期策略（刷新时长 / 重置周期 /
+   逐层过期）、叠层数怎么进聚合器的账（N 层 = N 条 modifier 还是 1 条 × N？）。
+   UE 对照：FGameplayEffectStackingPolicy。连按 2 无限叠 buff 的已知问题在此正法。
+
+### 第二梯队：表现与交互（结算课全部关账后）
+
+3. **GameplayCue**——`gameplay_cue_tags` 躺了十几节无人消费。表现与逻辑解耦：
+   OnActive / WhileActive / OnRemoved 三个时刻，INSTANT 的一次性 cue 与
+   DURATION 的持续 cue。原则预告：**逻辑不许知道表现存在**（信号方向只出不进）；
+4. **更多 AbilityTask**——WaitInput（连招）、WaitAnimNotify（动画帧驱动伤害判定）。
+   把攻防结算从测试键接到"真按键/真动画"上，Task 生命周期法条（第 1 节 Bug 2）
+   的第二、第三个客户；
+5. **TargetData / 目标选择**——目前 target 是写死的木桩引用。选目标这件事怎么
+   变成数据（单体点选 / 范围多目标 fan-out apply），EffectContext 里 hit_result
+   一直空着的坑位在此填上。
+
+### 第三梯队：Tag 与 Ability 进阶
+
+6. **Tag 驱动的 GE 门禁**——ApplicationTagRequirements（免疫：持某 tag 拒收 GE）、
+   OngoingTagRequirements（挂着的 GE 被 tag 暂停/恢复——modifier 摘不摘？
+   聚合器课的直接续篇）、RemoveGameplayEffectsWithTags（驱散）；
+7. **Ability 间的 tag 关系**——block / cancel abilities with tags：
+   第 10 节 push 式打断只做了"tag 打断技能"，这课补全"技能之间互斥/抢占"的矩阵。
+
+### 选修与远景（有真实需求再开课）
+
+- **GE Level 与曲线**——ScalableFloat 兑现"Scalable"之名（等级 × 曲线表），
+  等出现"同一技能分等级"的真实需求；
+- **网络同步与预测**——明确**不做**：单机项目，且 Godot 的网络模型与 UE 差异过大。
+  PredictionKey 的思想（预表现 + 权威回滚）理解概念即可，handle/幂等课里已埋过种子。
+
+### 常备加餐池（各课热身随取）
+
+tag 祖先计数 O(1)、首跳立即开关（bExecutePeriodicEffectOnApplication）、
+SetByCaller key 换 tag（等层级校验有真实需求）、INSTANT 结算的 spec 级改写
+（急速缩短跳间隔——第 16 节"账本唯一出处"原则的伏笔）、docstring/日志清理类小活。
