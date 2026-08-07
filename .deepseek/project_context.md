@@ -27,10 +27,22 @@ Godot 4.7（Forward Plus）下用 GDScript 复刻 UE GameplayAbilitySystem 单�
 7. ExecutionCalculation：多属性攻防结算 + 小票 EvaluatedData + DoT 实时结算
    + 木桩（第 15-16 节）
 
-## 当前进度（2026-08-04）
+## 当前进度（2026-08-04 晚）
 
-- **最近一次提交**：`5998678` Update DEVLOG.md
-- **下一课（已备课，第 17 节）**：**聚合器（Aggregator）** —— 三本账并成一本。
+- **最近一次提交**：`a5687c8`（热身清理 + 聚合器第一步，已 push origin/main）
+- **课程：聚合器（Aggregator，第 17 节）进行中，处于第二步**：
+  - ✅ 热身三小项清账（warn 文案补 "executions ignored" / docstring 旧示例删除 /
+    `_registered_tags` 幽灵字段除根 / tags 插件日志统一 GameLogger / `%d`→`%s` 修复 /
+    manager 的 const LL 死代码删除）
+  - ✅ 第一步"先抽不改"：`attribute_data.gd` 的 `_evaluate()` 抽为
+    `static func evaluate(base, modifiers)`，`current_value` 改走它，逻辑逐行一致
+  - ⚠️ **未确认**：第一步安检门（"现有测试键一个数不变"）用户尚未口头确认跑过
+  - ⏳ **第二步待开工**：按 op 语义改 base 的权威入口 + 三处落账收编（INSTANT 分支 /
+    周期跳 / execution 小票）+ 拆 ADD-only 哨兵
+    - 设计问题未决：**逐条串行（A）vs 聚合一次（B）**——A 保持现状行为（纯修病），
+      B 让 INSTANT 与 DURATION 数学同构（定序与数组顺序解耦，行为变化需实验取证）；
+      另需答：MULTIPLY magnitude 语义须与 `_evaluate` 一致（0.5 表示 ×1.5）
+  - 后续：第三步依赖登记簿（跨墙依赖 + 实时重算），真实用例 `ge_buff_armor_from_attack`
   - 合账权威唯一化（`_evaluate()` 抽成静态纯函数）
   - INSTANT/周期跳/execution 三处 op 旧债清算（统一走按 op 语义改 base）
   - 捕获声明成数据 + 依赖重算（跨墙依赖 + 实时重算，第 18 节路线图第一梯队 1）
