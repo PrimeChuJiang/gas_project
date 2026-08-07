@@ -1051,6 +1051,86 @@ value 定案，之后源属性再变也无人过问（DoT 每跳实时是因为*
 ——层数、上限、刷新策略——是 Stacking 的活（连按 2 无限叠 buff 的已知问题届时正法）。
 完整排期见第 18 节路线图。
 
+### 课后复盘（2026-08-08 关账）
+
+本课分两阶段：先"先抽不改"立权威，后"按 op 语义落账"清旧债。
+
+#### 第一步：先抽不改（安检门通过）
+
+`_evaluate()` 抽成 `static evaluate(base, modifiers)` 纯函数，`current_value` 走它，
+逻辑逐行一致。安检门：全部测试键重跑，一个数不变（日志存档）。
+
+#### 第二步：B 方案（聚合一次）——三本账并成一本
+
+设计抉择：逐条串行（A）vs 聚合一次（B）。选 B——evaluate 算完一次写 base，
+INSTANT 与 DURATION 数学同构，定序与数组顺序解耦（票序 [×1.2, +50] 与
+[+50, ×1.2] 不再产出不同结果）。
+
+统一形状：**装配（分组）→ 聚合（evaluate）→ 落账（一次写）**。
+
+- 唯一落账漏斗 `apply_modifiers_to_base`（attribute_set）：读 base → evaluate →
+  `apply_base_value_change`（唯一写入口不动，钳制与信号照旧）；
+- INSTANT 分支与周期跳合并进同一个 `_apply_effect_modifiers` 装配；
+- execution 小票拆 target/source 双桶——`(attr_set, attr_name)` 双键的 GDScript
+  解法：两家账本来就是两个容器（对照 UE 的 target/source 两个 Container）；
+- ADD-only 哨兵（error + continue）拆除，非 ADD 小票放行。
+
+#### 类型化重构（顺手，但必要）
+
+`{"op", "magnitude"}` 裸字典全项目清剿，换成 `GASModifierPile`
+（op / magnitude / handle 三字段）。账本 `_modifiers`、evaluate 参数、漏斗参数
+全部换型——evaluate 函数体一个字没动（点号访问对类和字典同构）。
+分组容器 `GASModifierBucket` 装 `Dictionary[StringName, ModifierPileArray]`：
+**GDScript 禁止类型化集合嵌套**（Nested typed collections are not supported），
+字典值类型必须是扁平类——薄持有类是语言逼出来的惯用解，不是设计偏好。
+
+#### 这轮想通的原则
+
+- **唯一权威不是唯一函数**：evaluate 管"怎么合账"，`apply_base_value_change`
+  管"怎么写"，`apply_modifiers_to_base` 管"装配+落账"。mod 有两条生命周期通道
+  （租约挂账 / 买断落账），门必须不同，但两门共用一算法一写口；
+- **临时状态不进成员变量**：桶是函数级瞬态，挂成 ASC 成员又不清账 → 周期跳
+  每跳重复落账（越跳越毒）。"用完要清账"是"记账先于清理"的镜像罪名；
+- **语言限制也是设计信号**：嵌套泛型被拒 → 双键压平成双桶，比建类更贴原型；
+- **钳制 + 白卷 = 无现象**：DIVIDE -0.5 算出 1000 被 MaxHealth 钳回 500，
+  current 没变不发信号——系统全程正确，"没反应"是两机制叠加的表象；
+- **magnitude 语义契约**：乘除都是 1+m 系（MULTIPLY 0.5 = ×1.5；DIVIDE 2 = ÷3；
+  想 ÷2 写 1.0）。"直接除数"是记错的直觉，166 事件即教训。
+
+#### 踩的坑
+
+1. **buckets 挂成成员变量**。现场：DoT 越跳越毒。根因：桶只在 apply 入口重置，
+   周期跳复用残留桶。修法：挪进函数局部，自产自销。
+2. **execution 装桶只补内层首触**：`buckets[attr_set].has(...)` 在外层键缺失时
+   直接 null 崩。两段式首触（先外层后内层）缺一不可。
+3. **166 事件**：DIVIDE 值 2 期望 250，实得 166.67——不是系统错，是 1+m 语义。
+   配方作者写值前先背契约（想 ÷2 写 1.0）。
+4. **"键 4 没反应"假象**：DIVIDE -0.5 → 1000 → 钳 500 → 白卷。教训：
+   无日志 ≠ 没执行，先算一遍数学再查系统。
+5. **眩晕窗口内的火球**：键 5 后 2 秒内按 6 被 `_check_block` 拦下是机制正确
+   （拦截比放行更值得记录），非回归。
+
+#### 验收记录
+
+| # | 用例 | 期望 | 结果 |
+|---|---|---|---|
+| 1 | 回归全键（重构后） | 键 1 -50 / 键 2 +50 / 键 3 每跳 -5 无叠加 / 键 0+Minus 票退 / Equal false / T/Y/U/I/O/P/[ 全对齐 | ✓ |
+| 2 | 验证目标 2：INSTANT MULTIPLY -0.5 | 500 → 250（旧管道 499.5，数字天然岔开） | ✓ |
+| 3 | 验证目标 3：execution 非 ADD 小票 | O 键 MULTIPLY -0.5 小票 → npc 500 → 250 | ✓ |
+
+取证说明：三份带时间戳的完整控制台日志存档（03:16 / 03:18 / 03:21 三轮）。
+DoT 每跳 -5 无叠加 = 双桶与清账重构的活体证据。
+
+#### 遗留
+
+- 第三阶段：**依赖登记簿**——捕获声明成数据、apply 时登记"谁依赖谁"、
+  attribute_changed 驱动实时重算、`_cleanup_effect` 对称拆线；
+  真实用例 `ge_buff_armor_from_attack`（DURATION，Armor += 30% source Attack，
+  is_snapshot=false）一靶两验（跨墙 + 实时）；
+- 验证目标 4/5（两段对照 / 拆线取证）随第三阶段开门；
+- 小账：`attribute_data` 的 `_modifiers` 注释删后未补（可留）；
+- 下一课排队：聚合器第三阶段 → Stacking → GameplayCue。
+
 ---
 
 ## 18. 教学路线图（2026-07-31 制定）

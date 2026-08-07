@@ -38,10 +38,7 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 	spec.target_asc = self
 	spec.resolve_all()
 	if spec.effect_def.duration_policy == GASEnums.DurationPolicy.INSTANT:
-		for mod in spec.modifiers:
-			var attr_set : GASAttributeSet = _find_attribute_set(mod.attr_name)
-			if attr_set != null:
-				attr_set.apply_base_value_change(mod.attr_name, mod.get_magnitude())
+		_apply_effect_modifiers(spec)
 		_run_executions(spec)
 		for attr_set in _attribute_sets:
 			attr_set.post_gameplay_effect_execute(spec)
@@ -153,13 +150,18 @@ func _cleanup_effect(entry: Dictionary) -> void:
 	for tag in entry.granted_tags._tags:
 		_remove_owned_tag(tag)
 
+func _apply_effect_modifiers(spec: GASEffectSpec) -> void:
+	var buckets := GASModifierBucket.new()
+	for mod in spec.modifiers:
+		buckets.append(mod.attr_name, mod.op, mod.get_magnitude())
+	for attr_name in buckets.items:
+		var attr_set := _find_attribute_set(attr_name)
+		if attr_set != null:
+			attr_set.apply_modifiers_to_base(attr_name, buckets.get_pile(attr_name))
 
 func _apply_periodic_effect(entry: Dictionary) -> void:
 	var spec: GASEffectSpec = entry.spec
-	for mod in spec.modifiers:
-		var attr_set = _find_attribute_set(mod.attr_name)
-		if attr_set != null:
-			attr_set.apply_base_value_change(mod.attr_name, mod.get_magnitude())
+	_apply_effect_modifiers(spec)
 	_run_executions(spec)
 	for attr_set in _attribute_sets:
 		attr_set.post_gameplay_effect_execute(spec)
@@ -213,21 +215,25 @@ func _cancel_active_abilities_with_tag(tag: FGameplayTag):
 				break
 
 func _run_executions(spec: GASEffectSpec) -> void:
+	var target_buckets := GASModifierBucket.new()
+	var source_buckets := GASModifierBucket.new()
 	for exec in spec.effect_def.executions:
-		var exec_array:Array[GASModifierEvaluatedData] = exec._execute(spec)
+		var exec_array: Array[GASModifierEvaluatedData] = exec._execute(spec)
 		if exec_array:
 			for mod_eval in exec_array:
-				if mod_eval.op != GASEnums.ModifierOp.ADD:
-					GameLogger.error("GameAbilitySystemComponent", "executions_calculation only support Add op !")
-					continue
-				var attr_set: GASAttributeSet = null
 				match mod_eval.receiver:
 					GASEnums.Receiver.TARGET:
-						attr_set = _find_attribute_set(mod_eval.attr_name)
+						target_buckets.append(mod_eval.attr_name, mod_eval.op, mod_eval.value)
 					GASEnums.Receiver.SOURCE:
 						if spec.source_asc:
-							attr_set = spec.source_asc.find_attribute_set(mod_eval.attr_name)
+							source_buckets.append(mod_eval.attr_name, mod_eval.op, mod_eval.value)
 						else:
 							GameLogger.error("GameAbilitySystemComponent", "source_asc in spec is null!")
-				if attr_set != null:
-					attr_set.apply_base_value_change(mod_eval.attr_name, mod_eval.value)
+	for attr_name in target_buckets.items:
+		var attr_set := _find_attribute_set(attr_name)
+		if attr_set != null:
+			attr_set.apply_modifiers_to_base(attr_name, target_buckets.get_pile(attr_name))
+	for attr_name in source_buckets.items:
+		var attr_set := spec.source_asc.find_attribute_set(attr_name)
+		if attr_set != null:
+			attr_set.apply_modifiers_to_base(attr_name, source_buckets.get_pile(attr_name))

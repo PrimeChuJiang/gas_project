@@ -27,37 +27,33 @@ Godot 4.7（Forward Plus）下用 GDScript 复刻 UE GameplayAbilitySystem 单�
 7. ExecutionCalculation：多属性攻防结算 + 小票 EvaluatedData + DoT 实时结算
    + 木桩（第 15-16 节）
 
-## 当前进度（2026-08-04 晚）
+## 当前进度（2026-08-08）
 
-- **最近一次提交**：`a5687c8`（热身清理 + 聚合器第一步，已 push origin/main）
-- **课程：聚合器（Aggregator，第 17 节）进行中，处于第二步**：
-  - ✅ 热身三小项清账（warn 文案补 "executions ignored" / docstring 旧示例删除 /
-    `_registered_tags` 幽灵字段除根 / tags 插件日志统一 GameLogger / `%d`→`%s` 修复 /
-    manager 的 const LL 死代码删除）
-  - ✅ 第一步"先抽不改"：`attribute_data.gd` 的 `_evaluate()` 抽为
-    `static func evaluate(base, modifiers)`，`current_value` 改走它，逻辑逐行一致
-  - ⚠️ **未确认**：第一步安检门（"现有测试键一个数不变"）用户尚未口头确认跑过
-  - ⏳ **第二步待开工**：按 op 语义改 base 的权威入口 + 三处落账收编（INSTANT 分支 /
-    周期跳 / execution 小票）+ 拆 ADD-only 哨兵
-    - 设计问题未决：**逐条串行（A）vs 聚合一次（B）**——A 保持现状行为（纯修病），
-      B 让 INSTANT 与 DURATION 数学同构（定序与数组顺序解耦，行为变化需实验取证）；
-      另需答：MULTIPLY magnitude 语义须与 `_evaluate` 一致（0.5 表示 ×1.5）
-  - 后续：第三步依赖登记簿（跨墙依赖 + 实时重算），真实用例 `ge_buff_armor_from_attack`
-  - 合账权威唯一化（`_evaluate()` 抽成静态纯函数）
-  - INSTANT/周期跳/execution 三处 op 旧债清算（统一走按 op 语义改 base）
-  - 捕获声明成数据 + 依赖重算（跨墙依赖 + 实时重算，第 18 节路线图第一梯队 1）
-- **路线图**（第 18 节）：
-  - 第一梯队：聚合器 → Stacking
-  - 第二梯队：GameplayCue → 更多 AbilityTask → TargetData
-  - 第三梯队：Tag 门禁（免疫/暂停/驱散）→ Ability 间 tag 关系
-  - 选修：GE Level 曲线；**网络同步明确不做**
-  - 加餐池：tag 祖先计数 O(1)、首跳立即开关、SetByCaller key 换 tag、spec 级改写等
-
-## 待清的小遗留（第 17 节热身清理项）
-
-1. warn 文案补后果半句（"executions ignored"）
-2. 测试文件 docstring 旧 float magnitude 示例
-3. GameplayTagsManager 启动日志"加载 6 个/注册总数 0"两行打架
+- **最近一次提交**：`2678c97`（记忆更新，已 push）；聚合器实作代码已随本会话提交
+- **课程：聚合器（第 17 节）第一步+第二步已关账**（2026-08-08）：
+  - ✅ 第一步"先抽不改"：`_evaluate()` → `static evaluate(base, modifiers)`，
+    current_value 走它；安检门全键回归通过（一个数不变）
+  - ✅ 第二步 B 方案（聚合一次）：三本账并成一本——`apply_modifiers_to_base`
+    唯一落账漏斗；INSTANT 与周期跳合并 `_apply_effect_modifiers`；execution
+    拆 target/source 双桶；ADD-only 哨兵拆除
+  - ✅ 类型化重构：GASModifierPile（op/magnitude/handle）+ GASModifierBucket
+    （GDScript 禁嵌套类型化集合 → 薄持有类）；账本/参数全换
+    `Array[GASModifierPile]`，evaluate 函数体零改动
+  - ✅ 验证目标 1/2/3 全绿：回归全键；INSTANT MULTIPLY -0.5 → 500→250；
+    execution 非 ADD 小票 → npc 500→250
+  - 已决：DIVIDE 保留 1+m 语义（166 事件复盘：÷2 写 1.0）
+- **待办：第三阶段（依赖登记簿，验证目标 4/5 的门）**：
+  - 捕获声明成数据挂在配方上；apply 时登记"谁依赖谁"、连 attribute_changed；
+    属性变 → 找受影响 modifier 重算 → 更新聚合器 magnitude → dirty → 信号级联
+  - 注销与登记对称（`_cleanup_effect` 加拆线，温习 tag 引用计数）
+  - 真实用例 `ge_buff_armor_from_attack`（DURATION，Armor += 30% source Attack，
+    is_snapshot=false）——跨墙依赖 + 实时重算一靶两验
+  - 设计未决：依赖环（A 依赖 B、B 依赖 A）第一课是否处理、至少是否看得见
+- **路线图**（第 18 节，不变）：第一梯队 聚合器（第三阶段）→ Stacking
+  （连按 2 无限叠 buff 已知问题正法）；第二梯队 GameplayCue → 更多 Task →
+  TargetData；第三梯队 Tag 门禁（免疫/暂停/驱散）→ Ability 间 tag 关系；
+  选修 GE Level 曲线；**网络同步明确不做**；加餐池照旧
+  （tag 祖先计数 O(1)、首跳立即开关、SetByCaller key 换 tag、spec 级改写等）
 
 ## 核心架构速记（讲思路时的参照）
 

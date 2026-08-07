@@ -69,6 +69,13 @@ func remove_modifier(attr_name: StringName, handle: int):
 	if data.current_value != old_value:
 		attribute_changed.emit(attr_name, data.current_value, old_value)
 
+func apply_modifiers_to_base(attr_name: StringName, modifiers: Array[GASModifierPile]) -> void:
+	var data = _attributes[attr_name]
+	if data:
+		var final = GASAttributeDATA.evaluate(data.base_value, modifiers)
+		apply_base_value_change(attr_name, final - data.base_value)
+	else:
+		GameLogger.error("GASAttributeSet", "can't find data in _attributes[%s]!" % attr_name)
 
 ## PreAttributeChange: BaseValue 写入前的拦截器（门禁）
 ##

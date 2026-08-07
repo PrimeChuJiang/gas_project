@@ -10,9 +10,7 @@ var current_value: float:
 			_dirty = false
 		return _cached_value
 
-# 存放当前挂载在该属性上的修饰器列表(由 Duration/Infinite 的 GE 提供)
-# 结构: [ {"handle": int, "op": ModifierOp, "magnitude": float}]
-var _modifiers: Array[Dictionary] = []
+var _modifiers: Array[GASModifierPile] = []
 
 var _dirty: bool = true
 var _cached_value: float = 0.0
@@ -25,7 +23,7 @@ func set_base_value(new_value: float):
 
 # 添加修改器
 func add_modifier(handle: int, op: GASEnums.ModifierOp, magnitude: float) -> void:
-	_modifiers.append({"handle": handle, "op": op, "magnitude": magnitude})
+	_modifiers.append(GASModifierPile.new(op, magnitude, handle))
 	_dirty = true
 
 # 移除指定修改器
@@ -41,9 +39,9 @@ func remove_all_modifiers():
 	_dirty = true
 
 # 计算动态值
-static func evaluate(base: float, modifier: Array[Dictionary]):
+static func evaluate(base: float, modifiers: Array[GASModifierPile]):
 	#1. Override 短路
-	for mod in modifier:
+	for mod in modifiers:
 		if mod.op == GASEnums.ModifierOp.OVERRIDE:
 			return mod.magnitude
 	
@@ -51,20 +49,20 @@ static func evaluate(base: float, modifier: Array[Dictionary]):
 	var result = base
 	
 	#3. 累加
-	for mod in modifier:
+	for mod in modifiers:
 		if mod.op == GASEnums.ModifierOp.ADD:
 			result += mod.magnitude
 	
 	#4. 累乘 (1 + magnitude)
 	var mult = 1.0
-	for mod in modifier:
+	for mod in modifiers:
 		if mod.op == GASEnums.ModifierOp.MULTIPLY:
 			mult *= (1.0 + mod.magnitude)
 	result *= mult
 	
 	#5. 累除 (1 + magnitude)
 	var div = 1.0
-	for mod in modifier:
+	for mod in modifiers:
 		if mod.op == GASEnums.ModifierOp.DIVIDE:
 			div *= (1.0 + mod.magnitude)
 	if div != 0.0:
