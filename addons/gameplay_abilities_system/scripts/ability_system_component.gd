@@ -56,7 +56,7 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 					attr_set.apply_modifier(mod.attr_name, handle, mod.op, mod.get_magnitude())
 		if not spec.effect_def.executions.is_empty():
 			if spec.period <= 0:
-				GameLogger.warn("GameAbilitySystemComponent", "execution only support \"period > 0\" type")
+				GameLogger.warn("GameAbilitySystemComponent", "execution only support \"period > 0\" type, executions ignored")
 		_active_effects.append({"handle": handle, "spec": spec, "remaining_time": spec.duration, "granted_tags":spec.effect_def.granted_tag, "period_timer": spec.period})
 		for tag in spec.effect_def.granted_tag._tags:
 			_add_owned_tag(tag)

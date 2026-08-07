@@ -2,14 +2,9 @@
 extends Node
 class_name GameplayTagsManager
 
-const LL := GameplayTagsLogger.LogLevel;
-
 # 项目设置（Project Settings）里这一项的 key 与默认值；插件注册和运行时读取共用同一份常量，避免字符串分裂
 const SETTING_CONFIG_PATH := "gameplay_tags/config/config_file_path"
 const DEFAULT_CONFIG_PATH := "res://addons/gameplay_tags/samples/config/default_gameplay_tags.cfg"
-
-# 全局注册表，键是StringName，值是FGameplayTag对象
-var _registered_tags : Dictionary = {}
 
 # 重定向映射表，键为旧StringName，值为新StringName
 var _redirect_map : Dictionary = {}
@@ -30,7 +25,7 @@ var _runtime_tag_pool: Dictionary = {}
 var config_resource_path = "res://addons/gameplay_tags/samples/resources/sample.tres"
 
 func _ready():
-	print("[GameplayTagsManager] 正在初始化基础标签...");
+	GameLogger.info("GameplayTagsManager", "正在初始化基础标签...")
 	
 # 1. 实例化我们的配置资源，并指定我们要读写的外部文本文件路径
 	_tags_data_list = GameplayTagsList.new()
@@ -38,7 +33,7 @@ func _ready():
 	_tags_data_list.config_file_path = ProjectSettings.get_setting(SETTING_CONFIG_PATH, DEFAULT_CONFIG_PATH)
 	reload_tags_from_config()
 	
-	print("[GameplayTagsManager] 初始化完成。当前注册标签总数: ", _registered_tags.size());
+	GameLogger.info("GameplayTagsManager", "初始化完成。当前注册标签总数: %d" % _runtime_tag_pool.size())
 
 # 核心注册方法，将字符串转换为全局唯一的FGameplayTag对象，并且处理多叉树的层级拆分
 func add_native_gameplay_tag(p_name: StringName) -> FGameplayTag:
@@ -156,7 +151,7 @@ func reload_tags_from_config() -> void:
 func _ensure_config_exists(path : String) -> void:
 	if not Engine.is_editor_hint(): return;
 	if FileAccess.file_exists(path): return;
-	GameplayTagsLogger.print_log(LL.INFO, "[GameplayTagManager]", "创建初始化标签");
+	GameLogger.info("[GameplayTagManager]", "创建初始化标签")
 	var dir := path.get_base_dir();
 	if not DirAccess.dir_exists_absolute(dir):
 		DirAccess.make_dir_recursive_absolute(dir);

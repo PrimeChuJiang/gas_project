@@ -6,7 +6,7 @@ var base_value: float = 0.0
 var current_value: float:
 	get:
 		if _dirty:
-			_cached_value = _evaluate()
+			_cached_value = evaluate(base_value, _modifiers)
 			_dirty = false
 		return _cached_value
 
@@ -41,30 +41,30 @@ func remove_all_modifiers():
 	_dirty = true
 
 # 计算动态值
-func _evaluate():
+static func evaluate(base: float, modifier: Array[Dictionary]):
 	#1. Override 短路
-	for mod in _modifiers:
+	for mod in modifier:
 		if mod.op == GASEnums.ModifierOp.OVERRIDE:
 			return mod.magnitude
 	
 	#2. 从基础数值开始
-	var result = base_value
+	var result = base
 	
 	#3. 累加
-	for mod in _modifiers:
+	for mod in modifier:
 		if mod.op == GASEnums.ModifierOp.ADD:
 			result += mod.magnitude
 	
 	#4. 累乘 (1 + magnitude)
 	var mult = 1.0
-	for mod in _modifiers:
+	for mod in modifier:
 		if mod.op == GASEnums.ModifierOp.MULTIPLY:
 			mult *= (1.0 + mod.magnitude)
 	result *= mult
 	
 	#5. 累除 (1 + magnitude)
 	var div = 1.0
-	for mod in _modifiers:
+	for mod in modifier:
 		if mod.op == GASEnums.ModifierOp.DIVIDE:
 			div *= (1.0 + mod.magnitude)
 	if div != 0.0:

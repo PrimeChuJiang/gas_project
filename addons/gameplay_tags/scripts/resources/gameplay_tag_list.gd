@@ -31,7 +31,7 @@ func load_from_config() -> void:
 	var config = ConfigFile.new()
 	var err = config.load(config_file_path)
 	if err != OK:
-		push_warning("[GameplayTagsList] 未能成功加载配置文件，可能文件不存在，将使用空列表。路径: " + config_file_path)
+		GameLogger.warn("GameplayTagsList", "未能成功加载配置文件，可能文件不存在，将使用空列表。路径: %s" % config_file_path)
 		return
 		
 	gameplay_tag_list.clear()
@@ -51,7 +51,7 @@ func load_from_config() -> void:
 			if re_data is Dictionary:
 				gameplay_tag_redirects.append(re_data)
 	
-	print("[GameplayTagsList] 成功从文本配置加载了 ", gameplay_tag_list.size(), " 个标签。")
+	GameLogger.info("GameplayTagsList", "成功从文本配置加载了 %d 个标签" % gameplay_tag_list.size())
 
 
 ## 将当前数据持久化保存到 .cfg 文件中
@@ -70,6 +70,6 @@ func save_to_config() -> void:
 		
 	var err = config.save(config_file_path)
 	if err != OK:
-		push_error("[GameplayTagsList] 无法将配置保存到文件: " + config_file_path)
+		GameLogger.error("GameplayTagsList", "无法将配置保存到文件 %s" % config_file_path)
 	else:
-		print("[GameplayTagsList] 成功将最新配置持久化到硬盘文本: " + config_file_path)
+		GameLogger.info("GameplayTagsList", "成功将最新配置持久化到硬盘文本: %s" % config_file_path)
