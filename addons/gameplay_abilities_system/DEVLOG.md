@@ -1131,6 +1131,65 @@ DoT 每跳 -5 无叠加 = 双桶与清账重构的活体证据。
 - 小账：`attribute_data` 的 `_modifiers` 注释删后未补（可留）；
 - 下一课排队：聚合器第三阶段 → Stacking → GameplayCue。
 
+### 第三阶段复盘：依赖登记簿（2026-08-08 晚，关账）
+
+#### 问题本质
+
+is_snapshot=false 只实时到 apply 时刻——非快照 AttributeBased modifier 挂上后，
+源属性再变，账页里的 magnitude 纹丝不动（捕获值住账页，但没人知道"它依赖谁"）。
+
+#### 设计（对照 UE 的取舍）
+
+- **簿挂"被读属性的家"**（`from_target ? self : source_asc`）：事件一定在自家
+  发生，跨墙信号线一根不用拉。UE 的 `AttributeDependencies` 挂在持有 ActiveGE
+  的 target 容器、事件线只认本家——跨 ASC 的非快照依赖是 UE 的已知薄弱点，
+  我们绕开它的姿势就是"簿随事件走"；
+- **条目**：`{asc, attr_name, handle, mod_spec}`，键 = 被读属性名；
+  重算 = `magnitude_def._calculate(effect_spec)` → `asc.find_attribute_set(...)
+  .update_modifier_magnitude(...)`；
+- **登记条件与挂账同门**（`period == 0` + `is AttributeBased` + 非快照）——
+  登记簿只服务常驻账页；INSTANT 落账即散、周期 GE 每跳重跑配方，都不需要；
+- **环保护**：`_recalc_stack` 链上已见 → warn + 返回（看得见，不处理）。
+  栈比布尔好：合法级联（A→B→C）还能走，只有真环才停；
+- **拆线**：`_cleanup_effect` 按 handle 删单条、删空才删键（tag 引用计数同款对称）。
+
+#### 新增 API
+
+`GASAttributeDATA.set_modifier_magnitude`（账页第三操作：挂/摘/改）、
+`GASAttributeSet.update_modifier_magnitude`（白卷不发地发信号）、
+`GASModifierSpec.effect_spec`（back-ref，重算够得到配方）。
+
+#### 踩的坑
+
+1. **continue 短路登记**：挂账后 continue，把唯一该登记的场景（period==0）全跳过，
+   登记反而只在周期 GE 上跑——方向反了。挂账与登记独立判断、同门、互不短路。
+2. **拆线整键删除**：`erase(键)` 把同一键下别人的依赖条目一起删了——静默断链，
+   最阴。按 handle 删单条、删空才删键。
+3. **类型检查写成直接赋值**：`var x: Sub = base_ref` 是运行时校验，非子类时
+   报 Invalid type in assignment + null——不能当类型判断用。`is` + `as` 才是。
+4. **方法调错基座**：`update_modifier_magnitude` 在 AttributeSet 上，拿 ASC 直调
+   报 Nonexistent function。链条是 `asc → find_attribute_set → set方法`。
+
+#### 验收记录
+
+| # | 用例 | 期望 | 结果 |
+|---|---|---|---|
+| 1 | S 挂上生效 | npc Armor 80 → 110 | ✓ |
+| 2 | 验证目标 4：Attack buff 上/到期 | 110 → 125（立即跟涨）/ → 110（回落），"定死"假设两次死刑 | ✓ |
+| 3 | 三 buff 叠加重算 | 170 → 185/200/215（三条账页依次更新）| ✓ |
+| 4 | 验证目标 5：buff 到期后改 Attack | Armor 纹丝不动 + 无重算日志（尸体听者反证）| ✓ |
+
+取证说明：17:51 一轮（跨墙 + 叠加 + 拆线半程证据）+ 17:55 一轮（拆线终局）带
+时间戳日志存档。
+
+#### 遗留
+
+- 聚合器课（第 17 节）三阶段全部关账；
+- 周期 GE 的非快照 modifier 仍取 apply 时刻定值（每跳不重算 magnitude）——
+  spec 级改写或周期重捕获留待后续，当前行为与文档一致；
+- 小账：`attribute_data` 的 `_modifiers` 注释未补（可留）；
+- 下一课排队：**Stacking**（连按 2 无限叠 buff 已知问题正法）→ GameplayCue。
+
 ---
 
 ## 18. 教学路线图（2026-07-31 制定）

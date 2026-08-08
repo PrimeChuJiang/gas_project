@@ -27,10 +27,10 @@ Godot 4.7（Forward Plus）下用 GDScript 复刻 UE GameplayAbilitySystem 单�
 7. ExecutionCalculation：多属性攻防结算 + 小票 EvaluatedData + DoT 实时结算
    + 木桩（第 15-16 节）
 
-## 当前进度（2026-08-08）
+## 当前进度（2026-08-08 晚）
 
-- **最近一次提交**：`2678c97`（记忆更新，已 push）；聚合器实作代码已随本会话提交
-- **课程：聚合器（第 17 节）第一步+第二步已关账**（2026-08-08）：
+- **最近一次提交**：`585d046`（聚合器第二步关账，已 push）；第三阶段代码与文档待提交
+- **课程：聚合器（第 17 节）三阶段全部关账**（2026-08-08）：
   - ✅ 第一步"先抽不改"：`_evaluate()` → `static evaluate(base, modifiers)`，
     current_value 走它；安检门全键回归通过（一个数不变）
   - ✅ 第二步 B 方案（聚合一次）：三本账并成一本——`apply_modifiers_to_base`
@@ -41,18 +41,21 @@ Godot 4.7（Forward Plus）下用 GDScript 复刻 UE GameplayAbilitySystem 单�
     `Array[GASModifierPile]`，evaluate 函数体零改动
   - ✅ 验证目标 1/2/3 全绿：回归全键；INSTANT MULTIPLY -0.5 → 500→250；
     execution 非 ADD 小票 → npc 500→250
-  - 已决：DIVIDE 保留 1+m 语义（166 事件复盘：÷2 写 1.0）
-- **待办：第三阶段（依赖登记簿，验证目标 4/5 的门）**：
-  - 捕获声明成数据挂在配方上；apply 时登记"谁依赖谁"、连 attribute_changed；
-    属性变 → 找受影响 modifier 重算 → 更新聚合器 magnitude → dirty → 信号级联
-  - 注销与登记对称（`_cleanup_effect` 加拆线，温习 tag 引用计数）
-  - 真实用例 `ge_buff_armor_from_attack`（DURATION，Armor += 30% source Attack，
-    is_snapshot=false）——跨墙依赖 + 实时重算一靶两验
-  - 设计未决：依赖环（A 依赖 B、B 依赖 A）第一课是否处理、至少是否看得见
-- **路线图**（第 18 节，不变）：第一梯队 聚合器（第三阶段）→ Stacking
-  （连按 2 无限叠 buff 已知问题正法）；第二梯队 GameplayCue → 更多 Task →
-  TargetData；第三梯队 Tag 门禁（免疫/暂停/驱散）→ Ability 间 tag 关系；
-  选修 GE Level 曲线；**网络同步明确不做**；加餐池照旧
+  - ✅ 第三阶段依赖登记簿：簿挂"被读属性的家"（from_target ? self :
+    source_asc，跨墙不拉信号线）；条目 {asc, attr_name, handle, mod_spec}；
+    `_recalc_stack` 环保护（看得见不处理）；`_cleanup_effect` 按 handle 拆线；
+    新增 set_modifier_magnitude / update_modifier_magnitude / effect_spec back-ref
+  - ✅ 验证目标 4/5 全绿：两段对照（110→125 跟涨 / 回落 110，"定死"假设两次
+    死刑）+ 拆线终局（buff 到期后改 Attack，Armor 纹丝不动无日志）
+  - 已决：DIVIDE 保留 1+m 语义（166 事件复盘：÷2 写 1.0）；依赖环第一课
+    只 warn 不处理
+- **下一课**（路线图第一梯队第 2 位）：**Stacking**——同一 GE 叠 N 层：
+  层数上限、到期策略（刷新时长 / 重置周期 / 逐层过期）、叠层数怎么进聚合器的账
+  （N 层 = N 条 modifier 还是 1 条 × N？）。UE 对照 FGameplayEffectStackingPolicy。
+  连按 2 无限叠 buff 的已知问题在此正法
+- **路线图**（第 18 节，不变）：第一梯队 Stacking → 第二梯队 GameplayCue →
+  更多 Task → TargetData；第三梯队 Tag 门禁（免疫/暂停/驱散）→ Ability 间
+  tag 关系；选修 GE Level 曲线；**网络同步明确不做**；加餐池照旧
   （tag 祖先计数 O(1)、首跳立即开关、SetByCaller key 换 tag、spec 级改写等）
 
 ## 核心架构速记（讲思路时的参照）

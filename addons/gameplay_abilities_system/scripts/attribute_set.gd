@@ -77,6 +77,14 @@ func apply_modifiers_to_base(attr_name: StringName, modifiers: Array[GASModifier
 	else:
 		GameLogger.error("GASAttributeSet", "can't find data in _attributes[%s]!" % attr_name)
 
+func update_modifier_magnitude(attr_name: StringName, handle: int, magnitude: float):
+	if _attributes.has(attr_name):
+		var data = _attributes[attr_name]
+		var old_value = data.current_value
+		data.set_modifier_magnitude(handle, magnitude)
+		if old_value != data.current_value:
+			attribute_changed.emit(attr_name, data.current_value, old_value)
+
 ## PreAttributeChange: BaseValue 写入前的拦截器（门禁）
 ##
 ## 职责：

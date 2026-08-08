@@ -4,13 +4,16 @@ extends RefCounted
 var attr_name: StringName
 var op: GASEnums.ModifierOp
 var magnitude_def: GASModifierMagnitude
+var effect_spec: GASEffectSpec
 var resolved: bool = false
 var value: float = 0.0
+
 
 func _init(mod: GEModifier, spec: GASEffectSpec):
 	attr_name = mod.attr_name
 	op = mod.op
 	magnitude_def = mod.magnitude
+	effect_spec = spec
 	if mod.magnitude.is_snapshot():
 		resolve(spec)
 

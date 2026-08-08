@@ -38,6 +38,15 @@ func remove_all_modifiers():
 	_modifiers.clear()
 	_dirty = true
 
+# 按照 handle 找到GASModifierPile，修改它的magnitude，置dirty
+func set_modifier_magnitude(handle: int, magnitude: float) -> void:
+	for pile in _modifiers:
+		if pile.handle == handle:
+			pile.magnitude = magnitude
+			_dirty = true
+			return
+	GameLogger.warn("GASAttributeData", "setting a unexisting modifier!")
+
 # 计算动态值
 static func evaluate(base: float, modifiers: Array[GASModifierPile]):
 	#1. Override 短路

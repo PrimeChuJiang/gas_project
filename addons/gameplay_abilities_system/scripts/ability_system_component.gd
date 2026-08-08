@@ -23,6 +23,11 @@ var _active_effects: Array = []
 var _abilities: Array[GASGameplayAbility] = []
 # 当前正在激活的能力列表
 var _active_abilities: Array[GASGameplayAbility] = []
+# 属性依赖列表
+# Array内结构为[{"asc":ASC, "attr_name": StringName, "handle": int, "mod_spec": GASModifierSpec}]
+var _attribute_dependencies: Dictionary[StringName, Array] = {}
+# 正在重算链上的属性
+var _recalc_stack: Array[StringName] = []
 
 func make_effect_spec(ge: GASGameplayEffect) -> GASEffectSpec:
 	var context : GASEffectContext = GASEffectContext.new()
@@ -48,9 +53,30 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 		_next_handle += 1
 		for mod in spec.modifiers:
 			var attr_set : GASAttributeSet = _find_attribute_set(mod.attr_name)
-			if attr_set != null:
-				if spec.period == 0:
-					attr_set.apply_modifier(mod.attr_name, handle, mod.op, mod.get_magnitude())
+			if attr_set != null and spec.period == 0:
+				attr_set.apply_modifier(mod.attr_name, handle, mod.op, mod.get_magnitude())
+			# 如果mod是一个AttributeBased类型的数据，那么我们需要额外记录，方便后续触发Duration类型的变化的时候
+			# 能同步进行修改
+			if spec.period == 0:
+				var mod_attr_based: GASModifierMagnitudeAttributeBased = mod.magnitude_def as GASModifierMagnitudeAttributeBased
+				if mod_attr_based and not mod_attr_based.is_snapshot():
+					var dep_attr: StringName = mod_attr_based.attr_name
+					var home: GASAbilitySystemComponent = self
+					if not mod_attr_based.from_target:
+						home = spec.source_asc
+						if home == null:
+							GameLogger.error("GameAbilitySystemComponent", "source_asc is null for dependency!")
+							continue
+					if not home._attribute_dependencies.has(dep_attr):
+						home._attribute_dependencies[dep_attr] = []
+					var dic = {
+						"asc": self,
+						"attr_name": mod.attr_name,
+						"handle": handle,
+						"mod_spec": mod
+					}
+					home._attribute_dependencies[dep_attr].append(dic)
+			
 		if not spec.effect_def.executions.is_empty():
 			if spec.period <= 0:
 				GameLogger.warn("GameAbilitySystemComponent", "execution only support \"period > 0\" type, executions ignored")
@@ -81,8 +107,9 @@ func init_ability_actor_info(owner: Node, avatar: Node) -> void:
 	owner_actor = owner
 	avatar_actor = avatar
 
-func add_attribute_set(_set: GASAttributeSet) -> void:
-	_attribute_sets.append(_set)
+func add_attribute_set(attr_set: GASAttributeSet) -> void:
+	_attribute_sets.append(attr_set)
+	attr_set.attribute_changed.connect(_on_attribute_changed)
 
 # 层级匹配查询：持有 State.Debuff.Stun 时，查询 State.Debuff 也应命中
 func has_tag(tag: FGameplayTag) -> bool:
@@ -149,6 +176,24 @@ func _cleanup_effect(entry: Dictionary) -> void:
 			attr_set.remove_modifier(attr_name, entry.handle)
 	for tag in entry.granted_tags._tags:
 		_remove_owned_tag(tag)
+	for mod in entry.spec.modifiers:
+		var mod_attr_based:= mod.magnitude_def as GASModifierMagnitudeAttributeBased
+		if mod_attr_based and not mod_attr_based.is_snapshot() and entry.spec.period == 0:
+			var home: GASAbilitySystemComponent = self
+			if not mod_attr_based.from_target:
+				home = entry.spec.source_asc
+				if home == null:
+					continue
+			var dep_attr: StringName = mod.magnitude_def.attr_name
+			if not home._attribute_dependencies.has(dep_attr):
+				continue
+			var deps: Array = home._attribute_dependencies[dep_attr]
+			for i in range(deps.size() - 1, -1, -1):
+				if deps[i].handle == entry.handle:
+					deps.remove_at(i)
+			if deps.is_empty():
+				home._attribute_dependencies.erase(dep_attr)
+				
 
 func _apply_effect_modifiers(spec: GASEffectSpec) -> void:
 	var buckets := GASModifierBucket.new()
@@ -237,3 +282,19 @@ func _run_executions(spec: GASEffectSpec) -> void:
 		var attr_set := spec.source_asc.find_attribute_set(attr_name)
 		if attr_set != null:
 			attr_set.apply_modifiers_to_base(attr_name, source_buckets.get_pile(attr_name))
+
+func _on_attribute_changed(attr_name: StringName, new_value: float, old_value: float) -> void:
+	if _attribute_dependencies.has(attr_name):
+		_recalculate_dependencies(attr_name)
+
+func _recalculate_dependencies(attr_name: StringName) -> void:
+	if _recalc_stack.has(attr_name):
+		GameLogger.warn("GameAbilitySystemComponent", "dependency loop detected: %s" % attr_name)
+		return
+	_recalc_stack.append(attr_name)
+	for dep in _attribute_dependencies[attr_name]:
+		var new_magnitude: float = dep.mod_spec.magnitude_def._calculate(dep.mod_spec.effect_spec)
+		var attr_set: GASAttributeSet = dep.asc.find_attribute_set(dep.attr_name)
+		if attr_set:
+			attr_set.update_modifier_magnitude(dep.attr_name, dep.handle, new_magnitude)
+	_recalc_stack.pop_back()

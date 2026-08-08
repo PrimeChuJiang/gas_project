@@ -17,6 +17,7 @@ var ge_damage_charge: GASGameplayEffect
 var ge_attack_vs_armor: GASGameplayEffect
 var ge_dot_execution: GASGameplayEffect
 var ge_add_armor: GASGameplayEffect
+var ge_buff_armor_from_attack: GASGameplayEffect
 
 var ga_fire_bolt: GAFireBoltAbility
 var ga_instance: GAInstanceTest
@@ -110,6 +111,7 @@ func _load_ge_resources() -> void:
 	ge_attack_vs_armor = load("res://addons/gameplay_abilities_system/test/ge_damage_attack_vs_armor.tres")
 	ge_dot_execution = load("res://addons/gameplay_abilities_system/test/ge_dot_execution.tres")
 	ge_add_armor = load("res://addons/gameplay_abilities_system/test/ge_add_armor.tres")
+	ge_buff_armor_from_attack = load("res://addons/gameplay_abilities_system/test/ge_buff_armor_from_attack.tres")
 	
 	# 验证4：SetByCaller——配方只声明"伤害数值由 key 'damage' 提供"，数值本身由调用方塞
 	ge_setbycaller_damage = GASGameplayEffect.new()
@@ -228,7 +230,7 @@ func _refresh_npc_ui():
 	GameLogger.debug("TestScene", "npc Mana is %d" % attr_set_npc.get_attribute_value(&"Mana"))
 	npc_max_mana_label.text = "最大魔力值：%d" % attr_set_npc.get_attribute_value(&"MaxMana")
 	GameLogger.debug("TestScene", "npc MaxMana is %d" % attr_set_npc.get_attribute_value(&"MaxMana"))
-	armor_label.text = "护甲：%d" % attr_set_npc.get_attribute_value(&"Armor")
+	npc_armor_label.text = "护甲：%d" % attr_set_npc.get_attribute_value(&"Armor")
 	GameLogger.debug("TestScene", "npc Armor is %d" % attr_set_npc.get_attribute_value(&"Armor"))
 
 
@@ -339,3 +341,6 @@ func _input(event: InputEvent):
 		"A":
 			var spec = asc_npc.make_effect_spec(ge_add_armor)
 			asc_npc.apply_gameplay_effect_spec_to_self(spec)
+		"S":
+			var spec = asc.make_effect_spec(ge_buff_armor_from_attack)
+			asc.apply_gameplay_effect_spec_to_target(spec, asc_npc)
