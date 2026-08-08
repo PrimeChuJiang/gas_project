@@ -189,10 +189,10 @@ func _on_tag_changed(tag: FGameplayTag, added: bool):
 	if tag == stun_tag:
 		if added:
 			status_label.text = "状态: 眩晕中"
-			assert(true, "眩晕标签已添加")  # 验证通过
+			assert(asc.has_tag(stun_tag), "眩晕 tag 添加后 has_tag 应为 true")
 		else:
 			status_label.text = "状态: 无"
-			assert(true, "眩晕标签已移除")  # 验证通过
+			assert(not asc.has_tag(stun_tag), "眩晕 tag 移除后 has_tag 应为 false")
 
 func _on_npc_tag_changed(tag: FGameplayTag, added: bool):
 	# —— TagsLabel 刷新 ——
@@ -253,7 +253,7 @@ func _input(event: InputEvent):
 			status_label.text = "状态: 补充血量 +50 "
 		"3":
 			asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_dot))
-			status_label.text = "状态: 中毒 (每0.5秒 -10)"
+			status_label.text = "状态: 中毒 (每0.5秒 -5)"
 		"4":
 			asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_big_damage))
 			status_label.text = "状态: 受到巨大伤害 -600"
@@ -344,3 +344,61 @@ func _input(event: InputEvent):
 		"S":
 			var spec = asc.make_effect_spec(ge_buff_armor_from_attack)
 			asc.apply_gameplay_effect_spec_to_target(spec, asc_npc)
+		"F":
+			_run_auto_regression()
+
+## 一键自动化回归（增量断言，可从任意场景状态开始跑）
+## 覆盖：INSTANT 伤害/治疗/MULTIPLY 砍半、DoT 周期与到期、INFINITE 挂摘、
+##       跨墙依赖实时重算与拆线
+func _run_auto_regression() -> void:
+	print("=== 自动化回归开始 ===")
+	# 1. INSTANT 伤害 -50
+	var h := attr_set.get_attribute_value(&"Health")
+	asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_damage))
+	assert(attr_set.get_attribute_value(&"Health") == h - 50.0, "1 INSTANT 伤害应为 -50")
+	print("PASS: 1 INSTANT 伤害 -50")
+	# 2. INSTANT 治疗 +50
+	h = attr_set.get_attribute_value(&"Health")
+	asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_heal_50))
+	assert(attr_set.get_attribute_value(&"Health") == h + 50.0, "2 INSTANT 治疗应为 +50")
+	print("PASS: 2 INSTANT 治疗 +50")
+	# 3. INSTANT MULTIPLY -0.5 砍半（聚合器验证目标 2 的常驻配方）
+	h = attr_set.get_attribute_value(&"Health")
+	asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_big_damage))
+	assert(attr_set.get_attribute_value(&"Health") == h * 0.5, "3 MULTIPLY -0.5 应砍半")
+	print("PASS: 3 MULTIPLY -0.5 砍半")
+	# 4. DoT 每 0.5s -5，到期回退
+	h = attr_set.get_attribute_value(&"Health")
+	asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_dot))
+	await get_tree().create_timer(1.2).timeout   # 0.5/1.0 两跳，1.5 第三跳未到
+	assert(attr_set.get_attribute_value(&"Health") == h - 10.0, "4a DoT 两跳应为 -10")
+	print("PASS: 4a DoT 两跳 -10")
+	await get_tree().create_timer(1.5).timeout   # 2.7s > 2.1s 到期（第 3/4 跳在 1.5/2.0 已结算）
+	assert(attr_set.get_attribute_value(&"Health") == h - 20.0, "4b DoT 到期停跳但伤害保留（周期落账是买断）")
+	print("PASS: 4b DoT 到期停跳，总伤 -20 保留")
+	# 5. INFINITE 挂/摘
+	var a := attr_set.get_attribute_value(&"Attack")
+	var shield_handle := asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_storm_shield))
+	assert(attr_set.get_attribute_value(&"Attack") == a + 50.0, "5a INFINITE 应 +50")
+	assert(asc.remove_active_effect(shield_handle), "5b 票移除应为 true")
+	assert(attr_set.get_attribute_value(&"Attack") == a, "5c 摘后应回退")
+	print("PASS: 5 INFINITE 挂摘")
+	# 6. 跨墙依赖：挂上生效 / 实时跟涨 / 拆线
+	var armor := attr_set_npc.get_attribute_value(&"Armor")
+	var attack_before := attr_set.get_attribute_value(&"Attack")
+	var armor_handle := asc.apply_gameplay_effect_spec_to_target(asc.make_effect_spec(ge_buff_armor_from_attack), asc_npc)
+	assert(is_equal_approx(attr_set_npc.get_attribute_value(&"Armor"), armor + 30.0), "6a 挂上应 +30")
+	print("PASS: 6a 挂上 +30")
+	asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_buff))
+	assert(attr_set.get_attribute_value(&"Attack") == attack_before + 50.0, "6b Attack buff 应生效")
+	assert(is_equal_approx(attr_set_npc.get_attribute_value(&"Armor"), armor + 45.0), "6c 实时跟涨应 +45")
+	print("PASS: 6b/c 跨墙实时重算（两段对照死刑一）")
+	asc_npc.remove_active_effect(armor_handle)
+	assert(is_equal_approx(attr_set_npc.get_attribute_value(&"Armor"), armor), "6d 拆线后 Armor 应回退")
+	assert(is_equal_approx(attr_set_npc.get_attribute_value(&"Armor"), armor), "6e Attack 仍在 150，Armor 纹丝不动（尸体听者反证）")
+	print("PASS: 6d/e 拆线干净")
+	await get_tree().create_timer(3.2).timeout   # Attack buff 3.0s 到期
+	assert(attr_set.get_attribute_value(&"Attack") == attack_before, "6f Attack buff 到期回退")
+	assert(is_equal_approx(attr_set_npc.get_attribute_value(&"Armor"), armor), "6g 到期后 Armor 仍不动")
+	print("PASS: 6f/g 全链路收尾")
+	print("=== 自动化回归全部通过 ===")

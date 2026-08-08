@@ -21,5 +21,5 @@ duration_policy = 1
 duration = 2.1
 period = 0.5
 modifiers = Array[ExtResource("1_uj5ol")]([SubResource("Resource_t40rp")])
-comment = "每 0.5 秒扣 10 血，持续 2 秒。期间触发 4 次周期（第 0.5、1.0、1.5、2.0 秒），共扣 40 血"
+comment = "每 0.5 秒扣 5 血，持续 2.1 秒。期间触发 4 次周期（第 0.5、1.0、1.5、2.0 秒），共扣 20 血"
 metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"

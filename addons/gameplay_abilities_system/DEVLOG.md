@@ -177,8 +177,12 @@
 
 UI：HealthLabel / AttackLabel / StatusLabel / **TagsLabel**（信号驱动，tag 状态可视化）。
 
-已知的测试债：`assert(true, ...)` 无意义断言未清；自动化断言路径（原 test_instant/test_duration
-函数）被注释，长期应恢复为可一键回归。
+> **测试债已清（2026-08-08）**：`assert(true, ...)` 换成真断言（眩晕 tag 的
+> `has_tag` 前后态校验）；新增 **F 键一键自动化回归** `_run_auto_regression()`
+> ——增量断言（任意场景状态可跑），覆盖 INSTANT 伤害/治疗/MULTIPLY 砍半、
+> DoT 周期与到期、INFINITE 挂摘、跨墙依赖实时重算与拆线，7 组全绿。
+> 顺带修正两处假口供：键 3 状态栏 "-10"→"-5"、ge_dot_poison 注释 "扣10×4=40"
+> →"扣5×4=20"。
 
 ---
 
