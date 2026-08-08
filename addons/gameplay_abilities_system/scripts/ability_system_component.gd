@@ -57,6 +57,11 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 			if count >= spec.effect_def.stack_limit:
 				GameLogger.warn("GameAbilitySystemComponent", "ge %s stack get limit" % spec.effect_def.resource_path)
 				return INVALID_HANDLE
+		elif spec.effect_def.stack_policy == GASEnums.StackingPolicy.REFRESH_DURATION:
+			for active_effect in _active_effects:
+				if _same_ge(active_effect.spec.effect_def, spec.effect_def):
+					active_effect.remaining_time = spec.duration
+					return active_effect.handle
 		var handle = _next_handle
 		_next_handle += 1
 		for mod in spec.modifiers:

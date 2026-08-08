@@ -20,6 +20,6 @@ metadata/_custom_type_script = "uid://defg8fw8hdubq"
 script = ExtResource("2_6i4dd")
 duration_policy = 1
 duration = 3.0
-stack_policy = 1
+stack_policy = 2
 modifiers = Array[ExtResource("1_h5bbr")]([SubResource("Resource_t0wfv")])
 metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"

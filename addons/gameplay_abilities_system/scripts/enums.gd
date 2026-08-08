@@ -25,5 +25,6 @@ enum Receiver{
 # GE堆叠策略
 enum StackingPolicy{
 	NONE,
-	LIMITED
+	LIMITED,
+	REFRESH_DURATION
 }
