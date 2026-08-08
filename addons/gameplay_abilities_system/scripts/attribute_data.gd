@@ -56,10 +56,19 @@ func set_modifier_stack_count(handle: int, stack_count: int) -> void:
 			return
 	GameLogger.warn("GASAttributeData", "setting stack_count on a unexisting modifier!")
 
+func set_modifier_suspended(handle: int, suspended: bool) -> void:
+	for pile in _modifiers:
+		if pile.handle == handle:
+			pile.suspended = suspended
+			_dirty = true
+			return
+
 # 计算动态值
 static func evaluate(base: float, modifiers: Array[GASModifierPile]):
 	#1. Override 短路
 	for mod in modifiers:
+		if mod.suspended:
+			continue
 		if mod.op == GASEnums.ModifierOp.OVERRIDE:
 			return mod.magnitude
 	
@@ -68,12 +77,16 @@ static func evaluate(base: float, modifiers: Array[GASModifierPile]):
 	
 	#3. 累加
 	for mod in modifiers:
+		if mod.suspended:
+			continue
 		if mod.op == GASEnums.ModifierOp.ADD:
 			result += mod.magnitude * mod.stack_count
 	
 	#4. 累乘 (1 + magnitude)
 	var mult = 1.0
 	for mod in modifiers:
+		if mod.suspended:
+			continue
 		if mod.op == GASEnums.ModifierOp.MULTIPLY:
 			mult *= (1.0 + mod.magnitude)
 	result *= mult
@@ -81,6 +94,8 @@ static func evaluate(base: float, modifiers: Array[GASModifierPile]):
 	#5. 累除 (1 + magnitude)
 	var div = 1.0
 	for mod in modifiers:
+		if mod.suspended:
+			continue
 		if mod.op == GASEnums.ModifierOp.DIVIDE:
 			div *= (1.0 + mod.magnitude)
 	if div != 0.0:

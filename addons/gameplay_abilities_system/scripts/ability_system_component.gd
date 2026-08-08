@@ -292,6 +292,7 @@ func _add_owned_tag(tag: FGameplayTag):
 	if not _tag_counts.has(tag):
 		_tag_counts[tag] = 1
 		gameplay_tag_changed.emit(tag, true)
+		_update_ongoing_requirements()
 		_cancel_active_abilities_with_tag(tag)
 	else :
 		_tag_counts[tag] += 1
@@ -304,6 +305,7 @@ func _remove_owned_tag(tag: FGameplayTag):
 	if _tag_counts[tag] == 0:
 		_tag_counts.erase(tag)
 		gameplay_tag_changed.emit(tag, false)
+		_update_ongoing_requirements()
 
 func _cancel_active_abilities_with_tag(tag: FGameplayTag):
 	var _active_ability_duplicate: Array[GASGameplayAbility]
@@ -371,3 +373,12 @@ func _sync_stack_count(entry: Dictionary) -> void:
 		var attr_set := _find_attribute_set(mod.attr_name)
 		if attr_set != null:
 			attr_set.update_modifier_stack_count(mod.attr_name, entry.handle, entry.stack_count)
+
+func _update_ongoing_requirements() -> void:
+	for entry in _active_effects:
+		var reqs: GASGameplayTagRequirements = entry.spec.effect_def.ongoing_tag_requirements
+		var met := reqs.requirements_met(has_tag)
+		for mod_spec in entry.spec.modifiers:
+			var attr_set := _find_attribute_set(mod_spec.attr_name)
+			if attr_set != null:
+				attr_set.update_modifier_suspended(mod_spec.attr_name, entry.handle, not met)

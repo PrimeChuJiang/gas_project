@@ -5,6 +5,8 @@
 [ext_resource type="Script" uid="uid://bmi3sw3w3ymx8" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect.gd" id="2_6i4dd"]
 [ext_resource type="Script" uid="uid://m5x7nbfvllco" path="res://addons/gameplay_abilities_system/scripts/modifier_magnitude/modifier_magnitude_scalable_float.gd" id="2_t0wfv"]
 [ext_resource type="Script" uid="uid://r1bokvajql3r" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_capture_definition.gd" id="4_8p37x"]
+[ext_resource type="Script" uid="uid://duyreunis5mf7" path="res://addons/gameplay_tags/scripts/structure/f_gameplay_tag_container.gd" id="4_bxn4x"]
+[ext_resource type="Script" uid="uid://dffiebd3homn" path="res://addons/gameplay_abilities_system/scripts/gameplay_tag_requirements.gd" id="5_nf0w6"]
 
 [sub_resource type="Resource" id="Resource_cvgg5"]
 script = ExtResource("2_t0wfv")
@@ -17,6 +19,15 @@ attr_name = &"Attack"
 magnitude = SubResource("Resource_cvgg5")
 metadata/_custom_type_script = "uid://defg8fw8hdubq"
 
+[sub_resource type="Resource" id="Resource_85hd0"]
+script = ExtResource("4_bxn4x")
+_saved_tag_names = Array[StringName]([&"State", &"State.Debuff", &"State.Debuff.Stun"])
+
+[sub_resource type="Resource" id="Resource_cttfp"]
+script = ExtResource("5_nf0w6")
+blocked_tags = SubResource("Resource_85hd0")
+metadata/_custom_type_script = "uid://dffiebd3homn"
+
 [resource]
 script = ExtResource("2_6i4dd")
 duration_policy = 1
@@ -24,4 +35,5 @@ duration = 3.0
 stack_policy = 2
 stack_limit = 3
 modifiers = Array[ExtResource("1_h5bbr")]([SubResource("Resource_t0wfv")])
+ongoing_tag_requirements = SubResource("Resource_cttfp")
 metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"

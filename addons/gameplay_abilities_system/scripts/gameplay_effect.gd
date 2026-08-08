@@ -39,5 +39,7 @@ extends Resource
 # 
 @export var application_tag_requirements: GASGameplayTagRequirements = GASGameplayTagRequirements.new()
 
+@export var ongoing_tag_requirements: GASGameplayTagRequirements = GASGameplayTagRequirements.new()
+
 # GE描述
 @export_multiline var comment: String = "注释，用于描述GE内容"
