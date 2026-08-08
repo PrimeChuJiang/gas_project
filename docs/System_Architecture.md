@@ -247,7 +247,7 @@ flowchart LR
     MGR -->|"轨道 2"| ROOTS["_root_nodes<br>多叉树根（Combat/State/...）<br>维护层级"]
     MGR -->|"享元池"| POOL["_runtime_tag_pool<br>StringName → FGameplayTag<br>全局唯一实例"]
     MAP --> NODE["FGameplayTagNode<br>token + 完整名 + 子节点"]
-    NODE --> CHAIN["parent_tags_chain<br>祖先名字缓存 {A, A.B, A.B.C}"]
+    NODE --> CHAIN["parent_tags_chain<br/>祖先名字缓存：A、A.B、A.B.C"]
     POOL --> TAG["FGameplayTag<br>（享元，== 即同一标签）"]
 ```
 
@@ -678,7 +678,7 @@ flowchart TD
 flowchart LR
     subgraph SRC["施法者 ASC（家）"]
         ATK["Attack 属性"]
-        BOOK["_attribute_dependencies[Attack]<br/>[{asc: 目标ASC, attr_name: Armor,<br/>handle, mod_spec}]"]
+        BOOK["_attribute_dependencies[Attack]<br/>条目：目标ASC + Armor + handle + mod_spec"]
     end
     subgraph TGT["目标 ASC"]
         ARM["Armor 的租约（magnitude = 0.3×Attack）"]
@@ -749,11 +749,11 @@ stateDiagram-v2
     state "已结束" as ENDED
 
     [*] --> IDLE: give_ability 装载（校验站）
-    IDLE --> ACTIVE: try_activate_ability<br/>can_activate 五道检查全过
-    ACTIVE --> ACTIVE: commit_ability 扣蓝+进冷却<br/>（蓄力完成后调用）
-    ACTIVE --> ENDED: end_ability(false) 正常完成
-    ACTIVE --> ENDED: end_ability(true) 被打断/取消
-    ENDED --> IDLE: 冷却 tag 消失后可再次激活
+    IDLE --> ACTIVE: "try_activate_ability<br/>can_activate 五道检查全过"
+    ACTIVE --> ACTIVE: "commit_ability<br/>扣蓝 + 进冷却（蓄力完成后调用）"
+    ACTIVE --> ENDED: "end_ability(false)<br/>正常完成"
+    ACTIVE --> ENDED: "end_ability(true)<br/>被打断 / 取消"
+    ENDED --> IDLE: "冷却 tag 消失后可再次激活"
 ```
 
 **关键纪律：所有能力路径的终点都必须是 `end_ability()`**（生命周期不变量）。
@@ -958,8 +958,8 @@ Modifier 的 magnitude 不再是裸 float，而是一个**会算的 Resource**�
 ```mermaid
 classDiagram
     class GASModifierMagnitude {
-        +_calculate(spec) float  虚函数
-        +is_snapshot() bool  快照？
+        +_calculate(spec) float
+        +is_snapshot() bool
     }
     GASModifierMagnitude <|-- GASModifierMagnitudeScalableFloat
     GASModifierMagnitude <|-- GASModifierMagnitudeAttributeBased
@@ -971,7 +971,10 @@ classDiagram
         +level_curve: Curve
     }
     class GASModifierMagnitudeAttributeBased {
-        +attr_name / coefficient / pre_add / post_add
+        +attr_name: StringName
+        +coefficient: float
+        +pre_add: float
+        +post_add: float
         +snapshot: bool
         +from_target: bool
         +level_curve: Curve
@@ -981,7 +984,10 @@ classDiagram
         +default_value: float
     }
     class GASModifierMagnitudeSetByCallerTimesAttribute {
-        +data_key / attr_name / coefficient
+        +data_key: StringName
+        +attr_name: StringName
+        +coefficient: float
+        +default_value: float
     }
 ```
 
@@ -1358,20 +1364,29 @@ gas_project/
 | 键 | 验证内容 |
 | --- | --- |
 | `1` | INSTANT 伤害 -50 |
-| `2` | DURATION 攻击 Buff（到期回退） |
+| `2` | INSTANT 治疗 +50 |
 | `3` | DoT 中毒（周期跳 -5） |
-| `4` | 大额伤害（Pre 钳制到 0） |
+| `4` | INSTANT MULTIPLY -0.5 砍半（聚合器按 op 语义落账） |
 | `5` | 眩晕（tag 授予/撤销，连按 = 计数） |
-| `6` | 火球全流程（蓄力 1.5s → -85）；蓄力中再按 = 取消（不扣蓝不进 CD） |
+| `6` | 火球全流程（蓄力 1.5s → 伤害 -85）；蓄力中再按 = 取消（不扣蓝不进 CD） |
 | `7/8/9` | 瞬发 / 多 Task / 取消（回归键） |
 | `0 / -` | 风暴之盾 挂（存 handle）/ 摘（按票退场） |
 | `=` | 旧票重试（期望 false——门票无害化） |
-| `F` | **一键自动化回归**（增量断言全绿） |
-| `T/Y` | SetByCaller 传值 / 缺省 fail 路径 |
+| `Q` | 攻击 Buff +50（DURATION，也是叠层测试键） |
+| `W / E / R` | 挂 +MaxHealth / 疾风戒指（冷却缩短）/ +MaxMana（INFINITE 装备） |
+| `T / Y` | SetByCaller 传值 -77 / 缺省走 default 0（fail 路径有警告） |
+| `U` | 蓄力伤害公式（charge_time=2.0 × Attack × -0.5） |
+| `I` | 木桩回归：AttributeBased 伤害（-0.3×Attack − 50） |
 | `O` | INSTANT 攻防结算（攻击 − 目标护甲） |
-| `P/A` | DoT 攻防结算 / 护甲 Buff（实时重算对照） |
+| `P / A` | DoT 攻防结算 / npc 护甲 Buff（实时重算对照） |
 | `S` | 跨墙依赖实时重算（Armor += 30% × source.Attack） |
-| `Q/W/E` | 叠层 / 刷新 / 等级曲线（进阶键） |
+| `D` | 中毒按攻击力折算（SetByCaller×Attribute） |
+| `H` | 驱散：按 tag 移除活跃效果（State.Debuff） |
+| `J` | StackBySource：不同来源独立叠层栈 |
+| `K / L / M` | 等级曲线伤害（-70 / -100 / -60 插值） |
+| `B / N / C` | 等级实时曲线：CharacterLevel 变 → 依赖登记簿实时重算 |
+| `V` | spec 级改写：period 0.5→0.1 急速跳（账本唯一出处原则） |
+| `F` | **一键自动化回归**（增量断言全绿） |
 
 ### 12.3 路线图
 
