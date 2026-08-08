@@ -29,11 +29,11 @@ var _attribute_dependencies: Dictionary[StringName, Array] = {}
 # 正在重算链上的属性
 var _recalc_stack: Array[StringName] = []
 
-func make_effect_spec(ge: GASGameplayEffect) -> GASEffectSpec:
+func make_effect_spec(ge: GASGameplayEffect, level: float = 0.0) -> GASEffectSpec:
 	var context : GASEffectContext = GASEffectContext.new()
 	context.instigator = owner_actor
 	context.effect_causer = avatar_actor
-	var spec = GASEffectSpec.new(ge, context, self)
+	var spec = GASEffectSpec.new(ge, context, self, null, level)
 	return spec
 
 func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:

@@ -22,8 +22,9 @@ var period: float = 0.0
 # 和定义层的结构是一致的，但magnitude是已经计算好了的
 var modifiers: Array[GASModifierSpec] = [] 
 
-func _init(effect: GASGameplayEffect, spec_context: GASEffectContext = null, spec_source_asc: GASAbilitySystemComponent = null, spec_target_asc: GASAbilitySystemComponent = null):
+func _init(effect: GASGameplayEffect, spec_context: GASEffectContext = null, spec_source_asc: GASAbilitySystemComponent = null, spec_target_asc: GASAbilitySystemComponent = null, p_level: float = 0.0):
 	effect_def = effect
+	level = p_level   # 必须在 modifiers 构建前赋值——快照在 GASModifierSpec._init 时就 resolve
 	duration = effect.duration
 	period = effect.period
 	context = spec_context

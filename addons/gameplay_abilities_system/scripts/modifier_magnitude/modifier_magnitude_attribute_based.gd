@@ -7,6 +7,8 @@ extends GASModifierMagnitude
 @export var post_add: float
 @export var snapshot: bool = true # 是否是快照
 @export var from_target: bool  # false=读source, true=读target(护甲折算用)
+# 等级曲线：x = 读到的属性值（如 CharacterLevel），y = 输出；配了曲线则曲线优先（实时等级走属性路线）
+@export var level_curve: Curve = null
 
 func _calculate(spec: GASEffectSpec) -> float:
 	if attr_name.is_empty():
@@ -30,6 +32,8 @@ func _calculate(spec: GASEffectSpec) -> float:
 		GameLogger.error("ModifierMagnitudeAttributeBased", "attr_set %s is null" % attr_name)
 		return 0.0
 	var base_value = attr_set.get_attribute_value(attr_name)
+	if level_curve:
+		return level_curve.sample(base_value)
 	return (coefficient * (base_value + pre_add)) + post_add
 
 func is_snapshot() -> bool:

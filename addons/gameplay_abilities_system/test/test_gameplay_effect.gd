@@ -18,6 +18,7 @@ var ge_attack_vs_armor: GASGameplayEffect
 var ge_dot_execution: GASGameplayEffect
 var ge_add_armor: GASGameplayEffect
 var ge_buff_armor_from_attack: GASGameplayEffect
+var ge_buff_level_attack: GASGameplayEffect
 var ge_poison_based_attack: GASGameplayEffect
 
 var ga_fire_bolt: GAFireBoltAbility
@@ -88,6 +89,7 @@ func _setup_character() -> void:
 		&"MaxMana": 1000.0,
 		&"CooldownReduction": 0.0,
 		&"Armor": 80.0,
+		&"CharacterLevel": 10.0,
 	}
 	attr_set.initial_attributes = _attributes
 	attr_set_npc.initial_attributes = _attributes
@@ -113,6 +115,7 @@ func _load_ge_resources() -> void:
 	ge_dot_execution = load("res://addons/gameplay_abilities_system/test/ge_dot_execution.tres")
 	ge_add_armor = load("res://addons/gameplay_abilities_system/test/ge_add_armor.tres")
 	ge_buff_armor_from_attack = load("res://addons/gameplay_abilities_system/test/ge_buff_armor_from_attack.tres")
+	ge_buff_level_attack = load("res://addons/gameplay_abilities_system/test/ge_buff_level_attack.tres")
 	ge_poison_based_attack = load("res://addons/gameplay_abilities_system/test/ge_poison_based_attack.tres")
 	
 	# 验证4：SetByCaller——配方只声明"伤害数值由 key 'damage' 提供"，数值本身由调用方塞
@@ -361,6 +364,30 @@ func _input(event: InputEvent):
 			# StackBySource 差异化：npc 作为 source 给 character 施加同一 buff → 独立栈
 			var spec = asc_npc.make_effect_spec(ge_buff)
 			asc_npc.apply_gameplay_effect_spec_to_target(spec, asc)
+		"K":
+			# 等级 2：曲线点 (2, -70) → -70（level 必须在 spec 构建时传入——快照离手即定）
+			asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_damage, 2.0))
+			status_label.text = "状态: 等级2伤害 -70"
+		"L":
+			# 等级 5：曲线点 (5, -100) → -100
+			asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_damage, 5.0))
+			status_label.text = "状态: 等级5伤害 -100"
+		"M":
+			# 等级 1：点 (0,-50) 与 (2,-70) 之间线性插值 → -60
+			asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_damage, 1.0))
+			status_label.text = "状态: 等级1伤害 -60（插值）"
+		"B":
+			# 层次2：等级曲线（实时，走依赖登记簿）——Attack += curve(CharacterLevel)
+			asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_buff_level_attack))
+			status_label.text = "状态: 等级加成挂上（curve(10)=+50）"
+		"N":
+			# 升 10 级：CharacterLevel 10→20，登记簿应驱动实时重算（curve(20)=+70）
+			attr_set.apply_base_value_change(&"CharacterLevel", 10.0)
+			status_label.text = "状态: 等级 10→20（应实时 +70）"
+		"C":
+			# 降 10 级：回 10，实时回落（curve(10)=+50）
+			attr_set.apply_base_value_change(&"CharacterLevel", -10.0)
+			status_label.text = "状态: 等级 20→10（应回落 +50）"
 
 ## 一键自动化回归（增量断言，可从任意场景状态开始跑）
 ## 覆盖：INSTANT 伤害/治疗/MULTIPLY 砍半、DoT 周期与到期、INFINITE 挂摘、
