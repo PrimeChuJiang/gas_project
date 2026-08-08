@@ -53,10 +53,7 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 		return INVALID_HANDLE
 	elif spec.effect_def.duration_policy == GASEnums.DurationPolicy.DURATION or spec.effect_def.duration_policy == GASEnums.DurationPolicy.INFINITE:
 		if spec.effect_def.stack_policy == GASEnums.StackingPolicy.LIMITED:
-			var effect : Dictionary = {}
-			for active_effect in _active_effects:
-				if _same_ge(active_effect.spec.effect_def, spec.effect_def):
-					effect = active_effect
+			var effect := _find_stack_entry(spec)
 			if not effect.is_empty():
 				if effect.stack_count >= spec.effect_def.stack_limit:
 					GameLogger.warn("GameAbilitySystemComponent", "ge %s stack get limit" % spec.effect_def.resource_path)
@@ -66,13 +63,13 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 					_sync_stack_count(effect)
 					return effect.handle
 		elif spec.effect_def.stack_policy == GASEnums.StackingPolicy.REFRESH_DURATION:
-			for active_effect in _active_effects:
-				if _same_ge(active_effect.spec.effect_def, spec.effect_def):
-					if active_effect.stack_count < spec.effect_def.stack_limit:
-						active_effect.stack_count += 1
-					active_effect.remaining_time = spec.duration
-					_sync_stack_count(active_effect)
-					return active_effect.handle
+			var effect := _find_stack_entry(spec)
+			if not effect.is_empty():
+				if effect.stack_count < spec.effect_def.stack_limit:
+					effect.stack_count += 1
+				effect.remaining_time = spec.duration
+				_sync_stack_count(effect)
+				return effect.handle
 		if spec.period == 0:
 			for mod_spec in spec.modifiers:
 				var attr_based := mod_spec.magnitude_def as GASModifierMagnitudeAttributeBased
@@ -382,3 +379,11 @@ func _update_ongoing_requirements() -> void:
 			var attr_set := _find_attribute_set(mod_spec.attr_name)
 			if attr_set != null:
 				attr_set.update_modifier_suspended(mod_spec.attr_name, entry.handle, not met)
+
+func _find_stack_entry(spec: GASEffectSpec) -> Dictionary:
+	for entry in _active_effects:
+		if _same_ge(entry.spec.effect_def, spec.effect_def):
+			if spec.effect_def.stack_type == GASEnums.StackType.STACK_BY_SOURCE and entry.spec.source_asc != spec.source_asc:
+				continue
+			return entry
+	return {}

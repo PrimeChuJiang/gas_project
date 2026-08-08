@@ -34,3 +34,9 @@ enum StackingExpirationPolicy{
 	REMOVE_SINGLE, # 一层一层的消除
 	CLEAR_ENTIRE # 整个GE一起消除
 }
+
+# 堆叠类型
+enum StackType{
+	AGGREGATE,
+	STACK_BY_SOURCE
+}
