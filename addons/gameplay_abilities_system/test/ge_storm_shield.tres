@@ -25,6 +25,7 @@ metadata/_custom_type_script = "uid://defg8fw8hdubq"
 script = ExtResource("2_o062h")
 duration_policy = 2
 stack_policy = 1
+stack_limit = 2
 modifiers = Array[ExtResource("1_l2nqa")]([SubResource("Resource_8exc7")])
 granted_tag = SubResource("Resource_hgeqx")
 comment = "测试INFINITE类型GE是否能够正常的加入ASC和从ASC上卸载"
