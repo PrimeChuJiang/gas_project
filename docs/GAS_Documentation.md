@@ -699,47 +699,65 @@ func get_target_data_in_radius(center, radius):
 | `FGameplayAbilityTargetData` | `GASAbilityTargetData`          | RefCounted   |
 | `IAbilitySystemInterface`    | （Duck typing，非必须）          | -            |
 
-### 13.2 文件结构规划
+### 13.2 文件结构（当前实际）
 
 ```
+addons/gameplay_tags/                    # Tag 插件（独立）
+├── gameplay_tags.gd                     # EditorPlugin：注册 autoload / 底部面板 / Inspector
+└── scripts/
+    ├── gameplay_tag_manager.gd          # 单例：双轨索引（哈希 + 多叉树）+ 享元池
+    ├── structure/                       # f_gameplay_tag / f_gameplay_tag_container
+    │                                    # / f_gameplay_tag_node / multi_way_tree
+    └── resources/gameplay_tag_list.gd   # cfg 文件读写
+
 addons/gameplay_abilities_system/
 ├── plugin.cfg
-├── gameplay_abilities_system.gd        # EditorPlugin 入口
-├── scripts/
-│   ├── ability_system_component.gd     # ASC 核心
-│   ├── attribute_set.gd               # 属性集
-│   ├── attribute_data.gd              # 属性数据单元
-│   ├── gameplay_ability.gd            # 能力类
-│   ├── ability_spec.gd                # 能力规格
-│   ├── gameplay_effect.gd             # 效果类
-│   ├── effect_spec.gd                 # 效果规格
-│   ├── effect_context.gd              # 效果上下文
-│   ├── ability_task.gd                # 异步任务基类
-│   ├── tasks/
-│   │   ├── wait_delay_task.gd
-│   │   ├── wait_target_data_task.gd
-│   │   ├── wait_gameplay_event_task.gd
-│   │   ├── wait_attribute_change_task.gd
-│   │   ├── wait_tag_change_task.gd
-│   │   └── play_animation_task.gd
-│   ├── gameplay_cue_manager.gd        # 表现效果管理器
-│   ├── effect_execution_calculation.gd # 执行器基类
-│   ├── modifier_magnitude_calculation.gd # MMC 基类
-│   ├── target_data.gd                 # 目标数据
-│   └── enums.gd                       # 枚举定义
+├── gameplay_abilities_system.gd         # EditorPlugin 入口
+└── scripts/
+    ├── enums.gd                         # DurationPolicy / ModifierOp / Stacking...
+    ├── attribute_data.gd                # 单个属性（evaluate 聚合权威）
+    ├── attribute_set.gd                 # 属性集（Pre 钳制 / Post 连锁钩子）
+    ├── gameplay_effect.gd               # GE 配方
+    ├── gameplay_effect_modifier.gd      # 一条修改指令
+    ├── gameplay_effect_spec.gd          # GE 实例
+    ├── gameplay_effect_context.gd       # 效果上下文
+    ├── gameplay_effect_capture_definition.gd  # 捕获声明
+    ├── gameplay_tag_requirements.gd     # 门禁条件（application / ongoing）
+    ├── ability_system_component.gd      # ASC 核心（大脑）
+    ├── gameplay_ability.gd              # 能力类
+    ├── ability_task.gd                  # 异步任务基类
+    ├── ability_task_delay.gd            # 延时任务
+    ├── modifier_pile.gd                 # 租约账页条目（op/magnitude/handle/层数/挂起）
+    ├── modifier_bucket.gd               # 装配分组容器
+    ├── modifier_spec.gd                 # modifier 运行时账页（resolved/value）
+    ├── modifier_evaluated_data.gd       # execution 输出小票
+    ├── modifier_magnitude/              # magnitude 家族（4 个子类）
+    ├── execution_calculation/           # 执行器基类
+    └── test/                            # TestScene + 测试 GE/能力 + 一键回归
 ```
 
-### 13.3 实现优先级（建议顺序）
+### 13.3 实现状态（2026-08 更新）
 
-1. **GASAttributeData** (已有基础) - 完善 BaseValue/CurrentValue 逻辑
-2. **GASAttributeSet** (已有基础) - 完善属性集、Pre/Post 回调
-3. **GASAbilitySystemComponent** (空壳) - 核心组件
-4. **GASGameplayEffect + GASEffectSpec** - 效果系统
-5. **GASGameplayAbility + GASAbilitySpec** - 能力系统
-6. **GASAbilityTask** - 异步任务支撑上述
-7. **GASGameplayCueManager** - 表现层
-8. **执行器/MMC** - 高级计算
-9. **TargetData** - 目标系统
+> 原"实现优先级"清单已全部推进完毕，按现状重排为状态表。
+> 完整架构讲解见 [System_Architecture.md](System_Architecture.md)。
+
+| # | 模块 | 状态 | 说明 |
+| --- | --- | --- | --- |
+| 1 | GASAttributeDATA | ✅ 完成 | Base/Current 双值 + 租约账页 + `evaluate()` 聚合权威 + 懒重算缓存 |
+| 2 | GASAttributeSet | ✅ 完成 | `pre_attribute_change`（钳制）/ `post_gameplay_effect_execute`（连锁）/ 双信号 |
+| 3 | GASAbilitySystemComponent | ✅ 完成 | 标签计数、效果账本（handle 门票）、能力管理、`_process` 心跳、依赖登记簿 |
+| 4 | GASGameplayEffect + GASEffectSpec | ✅ 完成 | 三策略 + 周期 DoT + granted_tag + 两道门禁 + 捕获声明 + Stacking 全家桶 |
+| 5 | GASGameplayAbility | ✅ 完成 | can_activate 四查 / activate + commit 分离 / push+pull 打断 / give_ability 校验站 |
+| 6 | GASAbilitySpec | ❌ 有意不做 | 每个 `give_ability` 直接 `new()` 独立实例，状态挂资源实例上，不需要 Spec 层 |
+| 7 | GASAbilityTask | ✅ 完成 | 基类 + Delay；WaitInput / WaitAnimNotify / WaitTargetData 排队中 |
+| 8 | 执行器 / MMC | ✅ 完成 | magnitude 四类（ScalableFloat / AttributeBased / SetByCaller / SetByCaller×Attr）+ ExecutionCalculation + 双桶落账 |
+| 9 | 依赖登记簿 | ✅ 完成 | 非快照属性依赖实时重算（簿挂被读属性的家，跨墙免拉线，环保护） |
+| 10 | GameplayCue | ⏳ 未开始 | `gameplay_cue_tags` 字段已预留，无人消费（路线图第一梯队） |
+| 11 | TargetData | ⏳ 未开始 | 测试中目标仍是写死的引用 |
+| 12 | 网络同步 / 预测 | ❌ 明确不做 | 单机项目，Godot 网络模型与 UE 差异过大 |
+
+> 除了上表，还额外完成了：GameplayTags 插件（享元 + 多叉树 + 引用计数）、
+> 测试场景 + F 键一键自动化回归。DEVLOG.md 记录了完整开发历程。
 
 ---
 
