@@ -352,6 +352,11 @@ func _input(event: InputEvent):
 		"D":
 			var spec = asc.make_effect_spec(ge_poison_based_attack)
 			asc.apply_gameplay_effect_spec_to_target(spec, asc_npc)
+		"H":
+			var query := FGameplayTagContainer.new()
+			query.add_tag(GameplayTags.request_gameplay_tag(&"State.Debuff"))
+			var removed = asc.remove_active_effects_with_tags(query)
+			GameLogger.info("TestScene", "dispel removed: " + str(removed))
 
 ## 一键自动化回归（增量断言，可从任意场景状态开始跑）
 ## 覆盖：INSTANT 伤害/治疗/MULTIPLY 砍半、DoT 周期与到期、INFINITE 挂摘、

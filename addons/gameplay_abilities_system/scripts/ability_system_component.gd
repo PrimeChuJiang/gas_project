@@ -130,6 +130,17 @@ func remove_active_effect(handle: int) -> bool:
 			return true
 	return false
 
+# 驱散：按 granted tag 匹配移除活跃效果（has_any = 含 query 任一 tag 的家族成员，
+# 与 has_tag 同向层级匹配）；快照遍历（remove 会改 _active_effects）；返回移除数量
+func remove_active_effects_with_tags(tags: FGameplayTagContainer) -> int:
+	var removed := 0
+	var snapshot: Array = _active_effects.duplicate()
+	for entry in snapshot:
+		if entry.granted_tags.has_any(tags):
+			if remove_active_effect(entry.handle):
+				removed += 1
+	return removed
+
 func init_ability_actor_info(owner: Node, avatar: Node) -> void:
 	owner_actor = owner
 	avatar_actor = avatar
