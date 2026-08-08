@@ -45,13 +45,26 @@ Godot 4.7（Forward Plus）下用 GDScript 复刻 UE GameplayAbilitySystem 单�
     逐层 250→200→150→100、主动移除整条、F 回归全绿
   - 已决：LIMITED=合并不续时长、REFRESH=合并+续时长+满层纯刷新（用户语义）；
     MULTIPLY/DIVIDE 不乘层数；叠层类型（AggregateBySource 等）未做
+- **课程：数据处理层收官（第 20 节）关账**（2026-08-08 深夜，10 项清账）：
+  - ✅ 8 项：捕获声明显式化（声明+fail-closed 校验）/ ApplicationTagRequirements
+    （GASGameplayTagRequirements 类，免疫拒收）/ 驱散（has_any 复用）/
+    OngoingTagRequirements（suspended flag，暂停恢复）/ 叠层类型
+    （STACK_BY_SOURCE 独立栈）/ 周期叠层计时（reset_period_on_stack）/
+    GE Level 层次 2（AttributeBased level_curve + CharacterLevel 属性 +
+    登记簿实时——三件套合体）/ spec 级改写核查（已满足零改动）
+  - ❌ 取消：SetByCaller key 换 tag（画蛇添足——与 data_key 无区别，用户否决）
+  - ⏸ 挂起：tag 祖先计数 O(1)（matches_tag 已 O(1)，等真实需求）
+  - 新账：Resource _init 零参铁律（必填参导致反序列化崩，探针定位）；
+    快照离手即定（level 必须构建前传——GASEffectSpec._init(p_level)）；
+    周期 GE 不挂账（_sync_stack_count 周期守卫）
 - **下一课**（第二梯队第 1 位）：**GameplayCue**——`gameplay_cue_tags` 躺了
   十几节没人消费：OnActive / WhileActive / OnRemoved 三时刻，INSTANT 一次性 cue
   与 DURATION 持续 cue；原则预告：**逻辑不许知道表现存在**（信号只出不进）
 - **路线图**（第 18 节，不变）：第一梯队 ✅ → GameplayCue → 更多 Task →
-  TargetData；第三梯队 Tag 门禁（免疫/暂停/驱散）→ Ability 间 tag 关系；
-  选修 GE Level 曲线；**网络同步明确不做**；加餐池照旧
-  （tag 祖先计数 O(1)、首跳立即开关、SetByCaller key 换 tag、spec 级改写等）
+  TargetData；第三梯队 Tag 门禁（免疫/暂停/驱散已提前做完）→ Ability 间
+  tag 关系；选修 GE Level 曲线（已完成层次2）；**网络同步明确不做**；加餐池
+  照旧（tag 祖先计数 O(1)、首跳立即开关、spec 级改写已核查、SetByCaller
+  key 换 tag 已判定画蛇添足）
 
 ## 核心架构速记（讲思路时的参照）
 

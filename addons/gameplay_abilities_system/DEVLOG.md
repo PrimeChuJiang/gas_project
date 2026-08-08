@@ -1323,3 +1323,84 @@ RefreshDuration）+ StackLimitCount。
 - MULTIPLY/DIVIDE 不乘层数（只 ADD——叠层 buff 99% 是 ADD，遇到再说）；
 - 周期 GE + 叠层的 period 计时策略（UE 的 StackPeriodResetPolicy）未做；
 - 下一课排队：**GameplayCue**（第二梯队，`gameplay_cue_tags` 躺了十几节没人消费）。
+
+---
+
+## 20. 数据处理层收官（2026-08-08 深夜，10 项清账）
+
+### 背景
+
+进表现层（GameplayCue）前，用户决定"不留尾巴"：把数据处理层的缺口按
+依赖排序一次清完。十项清单最终 **8 完成 / 1 取消 / 1 挂起**。
+
+### 完成的 8 项
+
+1. **捕获声明显式化**（RelevantAttributesToCapture）：`GASCaptureDefinition`
+   （@export 定义层）+ GE 顶层 `relevant_attributes` 声明；登记簿注册改走声明
+   定 home（不再偷读 magnitude 内部字段）；fail-closed 校验（未声明拒施，
+   先验后发）。策划可见清单落地；
+2. **ApplicationTagRequirements**（免疫拒收）：`GASGameplayTagRequirements`
+   类（required/blocked 容器 + `requirements_met(Callable)`）——拉类动机：
+   同一套判定被施加/持续/技能激活多门禁点复用；apply 入口先验后发。
+   验证：眩晕中伤害 GE 拒收，过期后正常；
+3. **RemoveGameplayEffectsWithTags**（驱散）：`has_any` 现成 API 即匹配
+   （含 query 任一 tag 家族成员）+ 快照遍历 + 返回移除数。验证：驱散
+   removed=1、无残留、风暴之盾不被误伤；
+4. **OngoingTagRequirements**（暂停/恢复）：`GASModifierPile.suspended` +
+   evaluate 四处跳过（含 OVERRIDE 短路）；tag 跳变沿驱动（blocked 出现=暂停、
+   消失=恢复）。验证：眩晕 150→100→150。决策：账页 flag 跳过（方案 B）
+   而非摘/重挂——幂等、无闪烁，权威函数带新规则演化（stack_count 同款先例）；
+5. **叠层类型**：`StackType`（AGGREGATE / STACK_BY_SOURCE）+ `_find_stack_entry`
+   助手统一找条目（STACK_BY_SOURCE 匹配 source_asc）。验证：Q×2=200、npc 源
+   独立栈 250→300、各自 limit 满拒、各自到期独立掉层 300→250→200；
+6. **周期叠层计时策略**：`reset_period_on_stack`（UE StackPeriodResetPolicy
+   的 ResetDuration）。验证：刷新续命不叠加（-5/跳不变）；
+7. **GE Level 层次 2（实时等级曲线）**：AttributeBased 加 `level_curve`
+   （x=属性值 y=输出，曲线优先）——等级变属性（CharacterLevel）走依赖登记簿
+   实时重算。曲线 + 捕获声明 + 登记簿三件套合体，零新机制。验证：
+   挂上 150 → 升级 170 实时 → 降级回落；
+8. **spec 级改写核查**：已满足零代码改动——spec.duration/period 为 public var，
+   apply 与 _process 均读 spec 运行时字段不读配方原件（第 16 节"账本唯一
+   出处"原则兑现）。验证：period 0.5→0.1 后每秒 10 跳 vs 原 2 跳。
+
+### 取消 1 项（画蛇添足的教训）
+
+- **SetByCaller key 换 tag**：`data_key_tag_name` 本质上仍是 StringName 字典键，
+  与 `data_key` 功能完全一致——不做注册校验、没有层级语义、查法相同；真正的
+  tag 语义需要 FGameplayTag 对象（RefCounted 无法 @export）参与。**收益为零，
+  纯改名**。用户否决后回滚。加餐池条目本就注明"等层级校验有真实需求"——
+  不该提前做。原则：**加功能先问"和现在有什么区别"**。
+
+### 挂起 1 项（等需求）
+
+- **tag 祖先计数 O(1)**：`matches_tag` 已是 O(1)（parent_tags_chain 哈希），
+  剩余空间只是压掉"遍历持有集合"——大项目几百 tag 才有感，当前收益≈0。
+
+### 踩的坑（本课新账）
+
+1. **Resource 零参反序列化铁律**：`GASCaptureDefinition._init(p_attr_name, ...)`
+   首参无默认值 → .tres 加载时零参调用 _init 直接崩 → 声明数组空 → fail-closed
+   误报"未声明"。探针一击定位（`Method expected 1 argument(s), but called
+   with 0`）。定义层类：**不写 _init，或全参数带默认值**；
+2. **快照离手即定（第 13 节原则实战）**：ScalableFloat 构建时 resolve，
+   `spec.level = 2` 设置太晚无效（K/L/M 全 -50）。修法：level 经
+   `GASEffectSpec._init(p_level)` 在构建前传入——**快照的参数必须在离手前给到**；
+3. **周期 GE 不挂账**：`_sync_stack_count` 对周期条目按 handle 找 pile 误报
+   （周期 GE 无 pile）。守卫 `period != 0` 跳过——层数只活在条目上；
+4. **@export 只收 Resource/Node/内置/枚举**：FGameplayTag（RefCounted）不能
+   export——tag 名本身是 StringName，直接当键，不需要持有对象。
+
+### 复盘沉淀（第 17-20 节的连续剧）
+
+- 依赖登记簿三件套（声明/登记簿/实时重算）在本课迎来第三个客户：等级曲线——
+  全是既有积木的组合，零新机制；
+- `GASGameplayTagRequirements` 的"拉类"决策被验证正确：第二个客户（Ongoing）
+  复用 `requirements_met` 零改动；
+- 验收文化升级：探针脚本（曲线采样、_init 反序列化）成为诊断标配；差异化
+  验证（跨源独立栈、免疫拒收）成为机制取证标配；
+- **不要画蛇添足**：每一个新字段先问"和现状有什么区别"——答不上来就是不做。
+
+### 下一课排队
+
+**GameplayCue**（第二梯队）——`gameplay_cue_tags` 躺了十几节没人消费：
+OnActive / WhileActive / OnRemoved 三时刻，逻辑不许知道表现存在。
