@@ -1,0 +1,111 @@
+[gd_scene load_steps=5 format=3 uid="uid://b2td2l8ndemo1"]
+
+[ext_resource type="Script" path="res://demo_launcher/launcher.gd" id="1_launcher"]
+
+[sub_resource type="StyleBoxFlat" id="panel_bg"]
+content_margin_left = 24.0
+content_margin_top = 24.0
+content_margin_right = 24.0
+content_margin_bottom = 24.0
+bg_color = Color(0.09, 0.1, 0.13, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.35, 0.45, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[sub_resource type="StyleBoxFlat" id="btn_normal"]
+content_margin_left = 30.0
+content_margin_top = 16.0
+content_margin_right = 30.0
+content_margin_bottom = 16.0
+bg_color = Color(0.2, 0.24, 0.3, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.5, 0.58, 0.7, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="btn_hover"]
+content_margin_left = 30.0
+content_margin_top = 16.0
+content_margin_right = 30.0
+content_margin_bottom = 16.0
+bg_color = Color(0.28, 0.34, 0.42, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.7, 0.8, 0.95, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[node name="Launcher" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_launcher")
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="Title" type="Label" parent="Center/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.78, 0.3, 1)
+theme_override_font_sizes/font_size = 34
+text = "GAS Demo 选择器"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="Center/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.65, 0.72, 1)
+theme_override_font_sizes/font_size = 15
+text = "Gameplay Ability System 演示 —— 两个游戏类别，同一套 GAS"
+horizontal_alignment = 1
+
+[node name="CardButton" type="Button" parent="Center/VBox"]
+custom_minimum_size = Vector2(480, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 19
+theme_override_styles/normal = SubResource("btn_normal")
+theme_override_styles/hover = SubResource("btn_hover")
+theme_override_styles/pressed = SubResource("btn_hover")
+text = "1. 地城桌游（卡牌回合制）—— TestScene"
+
+[node name="TopdownButton" type="Button" parent="Center/VBox"]
+custom_minimum_size = Vector2(480, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 19
+theme_override_styles/normal = SubResource("btn_normal")
+theme_override_styles/hover = SubResource("btn_hover")
+theme_override_styles/pressed = SubResource("btn_hover")
+text = "2. Top-Down 地城（实时 2D）—— 第二类游戏"
+
+[node name="Hint" type="Label" parent="Center/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.45, 0.5, 0.58, 1)
+theme_override_font_sizes/font_size = 13
+text = "点击按钮或按 1 / 2 进入对应 Demo（F5 运行）"
+horizontal_alignment = 1

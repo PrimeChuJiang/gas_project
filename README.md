@@ -15,7 +15,8 @@ Godot 的语言习惯（Resource 配方 / RefCounted 实例 / Node 驱动 / sign
 flowchart LR
     LOG["logger<br/>GameLogger 静态类"] --> GAS["gameplay_abilities_system<br/>GAS 主体"]
     TAGS["gameplay_tags<br/>GameplayTagsManager 单例"] --> GAS
-    GAS --> TEST["test/TestScene.tscn<br/>手动实验 + F 键回归"]
+    GAS --> TEST["test/TestScene.tscn<br/>地城桌游 demo"]
+    GAS --> TEST2["test_topdown/TopdownDungeon.tscn<br/>Top-Down 地城 demo"]
 ```
 
 ---
@@ -74,9 +75,49 @@ tag.matches_tag(GameplayTags.request_gameplay_tag(&"State.Debuff"))  # true
 | 能力 | `GASGameplayAbility` | 标签门禁 + 消耗/冷却 GE + activate/commit 分离 + push 打断 |
 | 异步 | `GASAbilityTask` | Node 化异步等待（Delay 已完成，WaitInput/Anim 排队） |
 
-**快速体验**：打开 `addons/gameplay_abilities_system/test/TestScene.tscn`
-运行，按 `F` 一键自动化回归；其余按键见
-[System_Architecture.md](docs/System_Architecture.md#122-动手实验testscene)。
+**快速体验**：F5 直接运行（默认主场景为场景选择器，可选择进入两个 demo）：
+
+### Demo 1：简化版地城桌游（HeroQuest 风格）
+
+勇者迎战哥布林/骷髅/兽人/毒蛇。
+
+- **鼠标交互**：点击绿色格子移动、点击怪物卡选择目标、点击底部技能卡施放
+  （治疗/护盾/药水无需目标）、点击装备槽换装、悬停卡片查看说明与冷却倒计时；
+- **键盘兼容**：`A/D` 移动、`1~8` 对应手牌、`T` 结束回合、`R` 重开、`F` 回归；
+- 按 `F` 一键自动化回归（102 项断言）；headless 跑法：
+
+```
+godot --headless --path . res://addons/gameplay_abilities_system/test/TestScene.tscn -- --run-tests
+```
+
+### Demo 2：Top-Down 地城（实时 2D，第二类游戏）
+
+无尽生存小地城：WASD 八向移动、单键攻击清怪、升级进化攻击形态、开宝箱挂装备。
+
+- **操作**：`WASD` 移动 · `空格/左键` 攻击 · `E` 开箱 · `R` 重开；
+- **唯一攻击「勇者之力」**：等级改变形态（数据表驱动）——
+  Lv1 近战斩击 → Lv3 圣光飞弹 → Lv5 三连圣光 → Lv7 圣光裁决（穿透+爆炸）；
+- **装备 4 槽**（武器/护甲/戒指/靴子）：INFINITE GE 挂摘，实时改造属性；
+- **怪物**（哥布林/骷髅兵/兽人/狗头人弓手）：索敌→追击→攻击，**死亡 3 秒后原地重生**，
+  强度随玩家等级动态成长；
+- **回归**：41 项断言 + UI 布局检查：
+
+```
+godot --headless --path . res://addons/gameplay_abilities_system/test_topdown/TopdownDungeon.tscn -- --run-tests
+godot --headless --path . res://addons/gameplay_abilities_system/test_topdown/TopdownDungeon.tscn -- --ui-check
+```
+
+键位、桌游设计、交互说明详见
+[System_Architecture.md](docs/System_Architecture.md#122-动手实验testscene地城桌游)
+（Demo 2 见 12.4 节）。
+
+**素材来源**：
+
+| 素材 | 授权 |
+| --- | --- |
+| `assets/game-icons.net/`（UI 图标，Lorc/Delapouite 等，见包内 LICENSE） | CC BY 3.0 |
+| `assets/dcss_tiles/`（Dungeon Crawl Stone Soup 地城贴图：角色/怪物/地砖/物品/特效） | CC0 |
+| `assets/kenney_roguelike/`（Kenney Roguelike/RPG 16x16 tilesheet，备用） | CC0 |
 
 ```gdscript
 # 最小示例：扣 50 血

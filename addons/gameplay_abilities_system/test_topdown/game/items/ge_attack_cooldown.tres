@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="GASGameplayEffect" format=3 uid="uid://dtd00000002ha"]
+
+[ext_resource type="Script" uid="uid://bmi3sw3w3ymx8" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect.gd" id="1_eff"]
+[ext_resource type="Script" uid="uid://duyreunis5mf7" path="res://addons/gameplay_tags/scripts/structure/f_gameplay_tag_container.gd" id="1_tags"]
+
+[sub_resource type="Resource" id="Resource_tags"]
+script = ExtResource("1_tags")
+_saved_tag_names = Array[StringName]([&"Ability.Attack.Cooldown"])
+
+[resource]
+script = ExtResource("1_eff")
+duration_policy = 1
+duration = 0.6
+granted_tag = SubResource("Resource_tags")
+comment = "攻击冷却：0.6 秒（形态可配置更短）"
+metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"

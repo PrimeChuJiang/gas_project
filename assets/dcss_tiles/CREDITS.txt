@@ -1,0 +1,20 @@
+# CREDITS —— assets/dcss_tiles
+
+素材来源：**Dungeon Crawl Stone Soup tiles（crawl-tiles）**
+
+- 项目页：https://opengameart.org/content/dungeon-crawl-32x32-tiles
+- 原始仓库：http://code.google.com/p/crawl-tiles/（现 https://github.com/crawl/tiles）
+- 作者：DCSS 众多贡献者（清单见原包 utility/FilteredList.txt）
+- 授权：**CC0 公有领域**（无需署名，致谢为惯例）
+
+本目录为从原包摘取的精简子集（勇者/怪物/地砖/物品/特效），
+原 LICENSE.txt（CC0）随包保留。全部贴图为 32x32 正交俯视。
+
+---
+
+# 备用素材：assets/kenney_roguelike/（Kenney Roguelike/RPG pack）
+
+- 项目页：https://kenney.nl/assets/roguelike-rpg-pack
+- 授权：CC0（见包内 License.txt）
+- 说明：16x16 贴图总表（57x31 网格，16px + 1px 边距）+ Tiled 样例地图。
+  本 demo 主要使用 dcss_tiles（文件语义明确），此包存档备用。

@@ -1356,39 +1356,89 @@ gas_project/
 └── docs/                               # 本文档 + UE 参考文档
 ```
 
-### 12.2 动手实验：TestScene
+### 12.2 动手实验：TestScene（地城桌游）
 
-`addons/gameplay_abilities_system/test/TestScene.tscn` 是活的实验场，
-运行后按键盘即可观察每一步（输出全部经过 GameLogger 带时间戳）：
+`addons/gameplay_abilities_system/test/TestScene.tscn` 是一个**简化版地城桌游**
+（HeroQuest 风格）：勇者在走廊中推进，迎战哥布林 / 骷髅兵 / 兽人 / 毒蛇，
+途中可换装、喝药、施放五种法术。逻辑层在 `test/game/`，纯信号驱动、零 UI 依赖，
+与表现层完全解耦——后续实现 GameplayCue / 表现层时可直接挂接而不动逻辑。
 
-| 键 | 验证内容 |
+**鼠标交互**（演示的默认操作方式）：
+
+| 操作 | 说明 |
 | --- | --- |
-| `1` | INSTANT 伤害 -50 |
-| `2` | INSTANT 治疗 +50 |
-| `3` | DoT 中毒（周期跳 -5） |
-| `4` | INSTANT MULTIPLY -0.5 砍半（聚合器按 op 语义落账） |
-| `5` | 眩晕（tag 授予/撤销，连按 = 计数） |
-| `6` | 火球全流程（蓄力 1.5s → 伤害 -85）；蓄力中再按 = 取消（不扣蓝不进 CD） |
-| `7/8/9` | 瞬发 / 多 Task / 取消（回归键） |
-| `0 / -` | 风暴之盾 挂（存 handle）/ 摘（按票退场） |
-| `=` | 旧票重试（期望 false——门票无害化） |
-| `Q` | 攻击 Buff +50（DURATION，也是叠层测试键） |
-| `W / E / R` | 挂 +MaxHealth / 疾风戒指（冷却缩短）/ +MaxMana（INFINITE 装备） |
-| `T / Y` | SetByCaller 传值 -77 / 缺省走 default 0（fail 路径有警告） |
-| `U` | 蓄力伤害公式（charge_time=2.0 × Attack × -0.5） |
-| `I` | 木桩回归：AttributeBased 伤害（-0.3×Attack − 50） |
-| `O` | INSTANT 攻防结算（攻击 − 目标护甲） |
-| `P / A` | DoT 攻防结算 / npc 护甲 Buff（实时重算对照） |
-| `S` | 跨墙依赖实时重算（Armor += 30% × source.Attack） |
-| `D` | 中毒按攻击力折算（SetByCaller×Attribute） |
-| `H` | 驱散：按 tag 移除活跃效果（State.Debuff） |
-| `J` | StackBySource：不同来源独立叠层栈 |
-| `K / L / M` | 等级曲线伤害（-70 / -100 / -60 插值） |
-| `B / N / C` | 等级实时曲线：CharacterLevel 变 → 依赖登记簿实时重算 |
-| `V` | spec 级改写：period 0.5→0.1 急速跳（账本唯一出处原则） |
-| `F` | **一键自动化回归**（增量断言全绿） |
+| 点击绿色格子 | 勇者逐格移动（每回合 Move 步，灰格不可达） |
+| 点击怪物卡 | 选择施法目标（高亮 + 状态栏显示） |
+| 点击技能卡 | 施放法术/攻击/喝药（需目标时先点怪物，hover 看说明） |
+| 点击装备槽 | 武器/盾循环切换，其余穿脱 |
+| 悬停 | 卡片说明、冷却倒计时、体力/魔力数值 |
+| 冷却/不可用 | 卡牌变灰并标注原因（眩晕/法力不足/行动已用/等待回合） |
 
-### 12.3 路线图
+**键盘兼容**：`A/D` 移动 · `1~8` 手牌 · `T` 结束回合 · `R` 重新开始 · `F` 一键回归。
+
+**开发辅助参数**：
+
+```
+godot --headless --path . res://addons/gameplay_abilities_system/test/TestScene.tscn -- --run-tests   # 回归（退出码 0 = 全绿）
+godot --headless --path . res://addons/gameplay_abilities_system/test/TestScene.tscn -- --ui-check    # 布局越界检查（1152×648）
+```
+
+**桌游中的属性耦合**（GAS 特性 → 游戏规则）：
+
+| GAS 特性 | 桌游表现 |
+| --- | --- |
+| pre_attribute_change 钳制 | Body↔MaxBody、Mind↔MaxMind；巨人腰带摘除 → Body 联动收缩 |
+| 消耗门禁（Cost GE） | Mind 不足时法术拒绝激活 |
+| ExecutionCalculation | 近战 / 怪物攻击统一走 攻击−防御 公式 |
+| INFINITE GE + handle | 装备挂摘；换装 = 旧票摘除 + 新票挂上 |
+| DURATION + Period DoT | 毒雾 / 蛇毒（每跳扣血 + Poison 标签） |
+| 纯标签 GE | 骷髅眩晕（无修改器，只授 State.Debuff.Stun） |
+| 标签门禁 + cancel | 眩晕时施法 / 攻击被拒；蓄力中被打断不扣费不进 CD |
+| AttributeBased 实时依赖 | 冰霜新星改 Move → Move≤0 的怪物无法接近英雄 |
+| SetByCaller | 火球伤害按 Level 属性现场计算；陷阱伤害随机注入 |
+| ScalableFloat 等级曲线 | 等级 → 曲线 → 法术伤害 |
+| 驱散 | remove_active_effects_with_tags 按 State.Debuff / Ability.Spell 清理 |
+
+### 12.3 动手实验：TopdownDungeon（实时 Top-Down 地城）
+
+`addons/gameplay_abilities_system/test_topdown/TopdownDungeon.tscn` 是**第二类游戏**
+demo：实时 top-down 2D 无尽生存小地城。与桌游 demo 同构——逻辑层
+`game/topdown_game.gd` 纯信号驱动、零 UI 依赖，表现层 `topdown_scene.gd` 只消费信号；
+但时钟从"回合"换成"每帧 `_process`"，由逻辑层做唯一权威（移动/碰撞/AI/弹道/重生）。
+
+**操作**：`WASD` 八向移动 · `空格/左键` 攻击 · `E` 开箱 · `R` 重开。
+
+**GAS 特性 → 玩法映射**（这轮的新课）：
+
+| GAS 特性 | Demo2 表现 |
+| --- | --- |
+| 唯一攻击能力 + **形态数据表** | `GAPlayerAttack` 在 `activate()` 读 `Level` 属性 → 查 `TopdownAttackForm` 表定形态（近战斩击/飞弹/三连/穿透爆炸），**数据驱动而非分支海** |
+| SetByCaller 注入系数 | 形态的伤害系数 `coeff` 由能力按形态塞进 Spec，**公式本体唯一住在 `TopdownDamageExecution`**（max(1, Attack×coeff−Defense)） |
+| INFINITE GE + handle | 4 槽装备（武器/护甲/戒指/靴子）挂摘，换装摘旧票挂新票 |
+| AttributeBased 实时依赖 | `MoveSpeed` 实时读属性：疾风靴/疾风戒生效瞬间提速、摘除瞬间回退 |
+| ScalableFloat | 装备数值、经验曲线（`xp_to_next = 40×Level`） |
+| DURATION 冷却 + granted_tag | 攻击攻速（`Ability.Attack.Cooldown`） |
+| post_gameplay_effect_execute | **升级连锁**：XP 满 → Level/MaxHealth/Attack 成长 + 回血，全部发生在属性集钩子里 |
+| pre_attribute_change 钳制 | Health↔MaxHealth；MaxHealth 下降联动收缩 |
+| 节点重建 = 天然复位 | 怪物死亡 3 秒后**重建节点**（新 ASC、零残留账单），强度随玩家等级成长 12%/级——"唯一收尾漏斗"的实战例 |
+| 表现/逻辑解耦 | 逻辑层管位置/血量（Vector2 + float），表现层每帧同步 Sprite、飘字、受击闪白、火把光照 |
+
+**回归**（41 项断言 + UI 检查）：
+
+```
+godot --headless --path . res://addons/gameplay_abilities_system/test_topdown/TopdownDungeon.tscn -- --run-tests
+godot --headless --path . res://addons/gameplay_abilities_system/test_topdown/TopdownDungeon.tscn -- --ui-check
+```
+
+**素材**：`assets/dcss_tiles/`（DCSS 贴图，CC0：角色/怪物/地砖/物品/弹道）
++ `assets/kenney_roguelike/`（Kenney Roguelike/RPG tilesheet，CC0，备用）。
+
+### 12.4 场景选择器
+
+`demo_launcher/Launcher.tscn` 为默认主场景：两个按钮（或按 `1`/`2`）进入对应 demo。
+两个 demo 的回归命令均显式传场景路径，不受主场景影响。
+
+### 12.5 路线图
 
 ```mermaid
 flowchart LR
