@@ -22,6 +22,9 @@ extends Resource
 # 堆叠消除策略
 @export var expiration_policy: GASEnums.StackingExpirationPolicy = GASEnums.StackingExpirationPolicy.REMOVE_SINGLE
 
+# 叠层/刷新时是否重置周期计时
+@export var reset_period_on_stack: bool = false
+
 @export var relevant_attributes: Array[GASCaptureDefinition] = []
 
 # GEModifier修改器列表

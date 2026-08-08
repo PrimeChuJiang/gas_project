@@ -68,6 +68,8 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 				if effect.stack_count < spec.effect_def.stack_limit:
 					effect.stack_count += 1
 				effect.remaining_time = spec.duration
+				if spec.effect_def.reset_period_on_stack:
+					effect.period_timer = spec.period
 				_sync_stack_count(effect)
 				return effect.handle
 		if spec.period == 0:
@@ -366,6 +368,8 @@ func _find_capture_def(effect_def: GASGameplayEffect, attr_name: StringName, fro
 	return null
 
 func _sync_stack_count(entry: Dictionary) -> void:
+	if entry.spec.period != 0:
+		return   # 周期 GE 不挂账（无 pile 可同步），层数只活在条目上
 	for mod in entry.spec.modifiers:
 		var attr_set := _find_attribute_set(mod.attr_name)
 		if attr_set != null:
