@@ -388,6 +388,12 @@ func _input(event: InputEvent):
 			# 降 10 级：回 10，实时回落（curve(10)=+50）
 			attr_set.apply_base_value_change(&"CharacterLevel", -10.0)
 			status_label.text = "状态: 等级 20→10（应回落 +50）"
+		"V":
+			# spec 级改写核查：急速缩短跳间隔（period 0.5 → 0.1）
+			var spec = asc.make_effect_spec(ge_dot)
+			spec.period = 0.1
+			asc.apply_gameplay_effect_spec_to_self(spec)
+			status_label.text = "状态: DoT 急速跳（period 0.1s）"
 
 ## 一键自动化回归（增量断言，可从任意场景状态开始跑）
 ## 覆盖：INSTANT 伤害/治疗/MULTIPLY 砍半、DoT 周期与到期、INFINITE 挂摘、
