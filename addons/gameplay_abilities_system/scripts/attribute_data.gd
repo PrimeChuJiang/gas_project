@@ -10,6 +10,7 @@ var current_value: float:
 			_dirty = false
 		return _cached_value
 
+# 租约账页：由 DURATION/INFINITE（period == 0）的 GE 挂载，带 handle 追踪，到期退租
 var _modifiers: Array[GASModifierPile] = []
 
 var _dirty: bool = true

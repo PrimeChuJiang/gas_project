@@ -206,6 +206,10 @@ func _apply_effect_modifiers(spec: GASEffectSpec) -> void:
 
 func _apply_periodic_effect(entry: Dictionary) -> void:
 	var spec: GASEffectSpec = entry.spec
+	# 每跳前重算非快照modifier
+	for mod_spec in spec.modifiers:
+		if not mod_spec.magnitude_def.is_snapshot():
+			mod_spec.resolve(spec)
 	_apply_effect_modifiers(spec)
 	_run_executions(spec)
 	for attr_set in _attribute_sets:

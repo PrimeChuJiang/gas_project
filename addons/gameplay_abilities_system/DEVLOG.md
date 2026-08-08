@@ -1194,6 +1194,18 @@ is_snapshot=false 只实时到 apply 时刻——非快照 AttributeBased modifi
 - 小账：`attribute_data` 的 `_modifiers` 注释未补（可留）；
 - 下一课排队：**Stacking**（连按 2 无限叠 buff 已知问题正法）→ GameplayCue。
 
+### 遗留清账（2026-08-08 深夜）
+
+- ✅ 周期 GE 非快照 modifier 实时化：`_apply_periodic_effect` 每跳前对
+  `is_snapshot() == false` 的 mod 重新 `resolve`（落账时刻是每跳 → 每跳重捕获）。
+  ScalableFloat（snapshot=true）不重算；SetByCaller 幂等重读。
+  验证：周期 GE（period 1s，0.3×source Attack）挂上后 Attack 100→150，
+  每跳 -30 → **-45**，回 100 后回落 -30——"apply 时刻定死"假设两次死刑；
+- ✅ `attribute_data._modifiers` 注释补回（"租约账页：DURATION/INFINITE
+  period==0 挂载，handle 追踪，到期退租"）；
+- ✅ 测试基建旧债：`assert(true)` 换真断言 + F 键一键自动化回归（见第 4 节）；
+- ✅ 两处 .tres 假口供修正（键 3 状态栏 / ge_dot_poison 注释）。
+
 ---
 
 ## 18. 教学路线图（2026-07-31 制定）

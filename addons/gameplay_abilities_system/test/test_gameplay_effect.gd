@@ -18,6 +18,7 @@ var ge_attack_vs_armor: GASGameplayEffect
 var ge_dot_execution: GASGameplayEffect
 var ge_add_armor: GASGameplayEffect
 var ge_buff_armor_from_attack: GASGameplayEffect
+var ge_poison_based_attack: GASGameplayEffect
 
 var ga_fire_bolt: GAFireBoltAbility
 var ga_instance: GAInstanceTest
@@ -112,6 +113,7 @@ func _load_ge_resources() -> void:
 	ge_dot_execution = load("res://addons/gameplay_abilities_system/test/ge_dot_execution.tres")
 	ge_add_armor = load("res://addons/gameplay_abilities_system/test/ge_add_armor.tres")
 	ge_buff_armor_from_attack = load("res://addons/gameplay_abilities_system/test/ge_buff_armor_from_attack.tres")
+	ge_poison_based_attack = load("res://addons/gameplay_abilities_system/test/ge_poison_based_attack.tres")
 	
 	# 验证4：SetByCaller——配方只声明"伤害数值由 key 'damage' 提供"，数值本身由调用方塞
 	ge_setbycaller_damage = GASGameplayEffect.new()
@@ -346,6 +348,9 @@ func _input(event: InputEvent):
 			asc.apply_gameplay_effect_spec_to_target(spec, asc_npc)
 		"F":
 			_run_auto_regression()
+		"D":
+			var spec = asc.make_effect_spec(ge_poison_based_attack)
+			asc.apply_gameplay_effect_spec_to_target(spec, asc_npc)
 
 ## 一键自动化回归（增量断言，可从任意场景状态开始跑）
 ## 覆盖：INSTANT 伤害/治疗/MULTIPLY 砍半、DoT 周期与到期、INFINITE 挂摘、
