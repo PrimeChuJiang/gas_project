@@ -36,5 +36,8 @@ extends Resource
 # 触发的表现效果标签
 @export var gameplay_cue_tags: FGameplayTagContainer = FGameplayTagContainer.new()
 
+# 
+@export var application_tag_requirements: GASGameplayTagRequirements = GASGameplayTagRequirements.new()
+
 # GE描述
 @export_multiline var comment: String = "注释，用于描述GE内容"

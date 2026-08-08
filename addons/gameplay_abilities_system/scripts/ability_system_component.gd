@@ -41,6 +41,9 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 		GameLogger.error("GameAbilitySystemComponent", "spec is null!")
 		return INVALID_HANDLE
 	spec.target_asc = self
+	if not spec.effect_def.application_tag_requirements.requirements_met(has_tag):
+		GameLogger.warn("GameAbilitySystemComponent", "ge %s rejected by application tag requirements" % spec.effect_def.resource_path)
+		return INVALID_HANDLE
 	spec.resolve_all()
 	if spec.effect_def.duration_policy == GASEnums.DurationPolicy.INSTANT:
 		_apply_effect_modifiers(spec)

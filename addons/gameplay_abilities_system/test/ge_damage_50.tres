@@ -3,7 +3,19 @@
 [ext_resource type="Script" uid="uid://duyreunis5mf7" path="res://addons/gameplay_tags/scripts/structure/f_gameplay_tag_container.gd" id="1_5hvff"]
 [ext_resource type="Script" uid="uid://bmi3sw3w3ymx8" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect.gd" id="1_5ovmi"]
 [ext_resource type="Script" uid="uid://defg8fw8hdubq" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_modifier.gd" id="2_d0diu"]
+[ext_resource type="Script" uid="uid://dffiebd3homn" path="res://addons/gameplay_abilities_system/scripts/gameplay_tag_requirements.gd" id="2_ycewq"]
 [ext_resource type="Script" uid="uid://m5x7nbfvllco" path="res://addons/gameplay_abilities_system/scripts/modifier_magnitude/modifier_magnitude_scalable_float.gd" id="3_d0diu"]
+[ext_resource type="Script" uid="uid://c6vfd5x4ybmyw" path="res://addons/gameplay_abilities_system/scripts/execution_calculation/gameplay_execution_calculation.gd" id="3_fhmki"]
+[ext_resource type="Script" uid="uid://r1bokvajql3r" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_capture_definition.gd" id="6_vpct3"]
+
+[sub_resource type="Resource" id="Resource_k4lol"]
+script = ExtResource("1_5hvff")
+_saved_tag_names = Array[StringName]([&"State", &"State.Debuff", &"State.Debuff.Stun"])
+
+[sub_resource type="Resource" id="Resource_bty8y"]
+script = ExtResource("2_ycewq")
+blocked_tags = SubResource("Resource_k4lol")
+metadata/_custom_type_script = "uid://dffiebd3homn"
 
 [sub_resource type="Resource" id="Resource_gm8y3"]
 script = ExtResource("1_5hvff")
@@ -27,4 +39,5 @@ script = ExtResource("1_5ovmi")
 modifiers = Array[ExtResource("2_d0diu")]([SubResource("Resource_cttfp")])
 asset_tags = SubResource("Resource_gm8y3")
 gameplay_cue_tags = SubResource("Resource_n8q72")
+application_tag_requirements = SubResource("Resource_bty8y")
 metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"
