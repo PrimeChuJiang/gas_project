@@ -16,6 +16,9 @@ extends Resource
 # 堆叠数量限制，仅当堆叠策略为LIMITED的时候生效
 @export var stack_limit: int = 1
 
+# 堆叠消除策略
+@export var expiration_policy: GASEnums.StackingExpirationPolicy = GASEnums.StackingExpirationPolicy.REMOVE_SINGLE
+
 # GEModifier修改器列表
 @export var modifiers: Array[GEModifier] = []
 

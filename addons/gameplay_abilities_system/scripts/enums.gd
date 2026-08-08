@@ -28,3 +28,9 @@ enum StackingPolicy{
 	LIMITED,
 	REFRESH_DURATION
 }
+
+# GE到期消除策略
+enum StackingExpirationPolicy{
+	REMOVE_SINGLE, # 一层一层的消除
+	CLEAR_ENTIRE # 整个GE一起消除
+}

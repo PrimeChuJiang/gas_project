@@ -85,6 +85,14 @@ func update_modifier_magnitude(attr_name: StringName, handle: int, magnitude: fl
 		if old_value != data.current_value:
 			attribute_changed.emit(attr_name, data.current_value, old_value)
 
+func update_modifier_stack_count(attr_name: StringName, handle: int, stack_count: int) -> void:
+	if _attributes.has(attr_name):
+		var data = _attributes[attr_name]
+		var old_value = data.current_value
+		data.set_modifier_stack_count(handle, stack_count)
+		if old_value != data.current_value:
+			attribute_changed.emit(attr_name, data.current_value, old_value)
+
 ## PreAttributeChange: BaseValue 写入前的拦截器（门禁）
 ##
 ## 职责：

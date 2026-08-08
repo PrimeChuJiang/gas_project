@@ -46,7 +46,15 @@ func set_modifier_magnitude(handle: int, magnitude: float) -> void:
 			pile.magnitude = magnitude
 			_dirty = true
 			return
-	GameLogger.warn("GASAttributeData", "setting a unexisting modifier!")
+	GameLogger.warn("GASAttributeData", "setting magnitude on a unexisting modifier!")
+
+func set_modifier_stack_count(handle: int, stack_count: int) -> void:
+	for pile in _modifiers:
+		if pile.handle == handle:
+			pile.stack_count = stack_count
+			_dirty = true
+			return
+	GameLogger.warn("GASAttributeData", "setting stack_count on a unexisting modifier!")
 
 # 计算动态值
 static func evaluate(base: float, modifiers: Array[GASModifierPile]):
@@ -61,7 +69,7 @@ static func evaluate(base: float, modifiers: Array[GASModifierPile]):
 	#3. 累加
 	for mod in modifiers:
 		if mod.op == GASEnums.ModifierOp.ADD:
-			result += mod.magnitude
+			result += mod.magnitude * mod.stack_count
 	
 	#4. 累乘 (1 + magnitude)
 	var mult = 1.0

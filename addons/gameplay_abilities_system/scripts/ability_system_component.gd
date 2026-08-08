@@ -17,7 +17,7 @@ var _tag_counts: Dictionary = {}
 # 效果句柄，自增 ID，唯一标识一个已激活的 GE
 # 用于 GE 到期时精确移除对应的 modifiers 和 granted_tags
 var _next_handle: int = 1
-# 结构为：[{handle, spec, remaining_time, period_timer, granted_tags}]
+# 结构为：[{handle, spec, remaining_time, period_timer, granted_tags, stack_count}]
 var _active_effects: Array = []
 # 已授予的能力列表
 var _abilities: Array[GASGameplayAbility] = []
@@ -50,17 +50,25 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 		return INVALID_HANDLE
 	elif spec.effect_def.duration_policy == GASEnums.DurationPolicy.DURATION or spec.effect_def.duration_policy == GASEnums.DurationPolicy.INFINITE:
 		if spec.effect_def.stack_policy == GASEnums.StackingPolicy.LIMITED:
-			var count := 0
+			var effect : Dictionary = {}
 			for active_effect in _active_effects:
 				if _same_ge(active_effect.spec.effect_def, spec.effect_def):
-					count += 1
-			if count >= spec.effect_def.stack_limit:
-				GameLogger.warn("GameAbilitySystemComponent", "ge %s stack get limit" % spec.effect_def.resource_path)
-				return INVALID_HANDLE
+					effect = active_effect
+			if not effect.is_empty():
+				if effect.stack_count >= spec.effect_def.stack_limit:
+					GameLogger.warn("GameAbilitySystemComponent", "ge %s stack get limit" % spec.effect_def.resource_path)
+					return INVALID_HANDLE
+				else:
+					effect.stack_count += 1
+					_sync_stack_count(effect)
+					return effect.handle
 		elif spec.effect_def.stack_policy == GASEnums.StackingPolicy.REFRESH_DURATION:
 			for active_effect in _active_effects:
 				if _same_ge(active_effect.spec.effect_def, spec.effect_def):
+					if active_effect.stack_count < spec.effect_def.stack_limit:
+						active_effect.stack_count += 1
 					active_effect.remaining_time = spec.duration
+					_sync_stack_count(active_effect)
 					return active_effect.handle
 		var handle = _next_handle
 		_next_handle += 1
@@ -93,7 +101,7 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 		if not spec.effect_def.executions.is_empty():
 			if spec.period <= 0:
 				GameLogger.warn("GameAbilitySystemComponent", "execution only support \"period > 0\" type, executions ignored")
-		_active_effects.append({"handle": handle, "spec": spec, "remaining_time": spec.duration, "granted_tags":spec.effect_def.granted_tag, "period_timer": spec.period})
+		_active_effects.append({"handle": handle, "spec": spec, "remaining_time": spec.duration, "granted_tags":spec.effect_def.granted_tag, "period_timer": spec.period, "stack_count": 1})
 		for tag in spec.effect_def.granted_tag._tags:
 			_add_owned_tag(tag)
 		return handle
@@ -180,7 +188,13 @@ func _process(delta: float):
 				_apply_periodic_effect(entry)
 		# 到期
 		if entry.spec.effect_def.duration_policy == GASEnums.DurationPolicy.DURATION and entry.remaining_time <= 0:
-			remove_active_effect(entry.handle)
+			if entry.spec.effect_def.expiration_policy == GASEnums.StackingExpirationPolicy.REMOVE_SINGLE and entry.stack_count > 1:
+				# 到期掉一层，续满时长
+				entry.stack_count -= 1
+				entry.remaining_time = entry.spec.duration
+				_sync_stack_count(entry)
+			else:
+				remove_active_effect(entry.handle)
 
 func _cleanup_effect(entry: Dictionary) -> void:
 	# 从所有 AttributeSet 移除该 handle 的 modifiers
@@ -320,3 +334,9 @@ func _same_ge(ge_a: GASGameplayEffect, ge_b: GASGameplayEffect) -> bool:
 	if not ge_a.resource_path.is_empty() and not ge_b.resource_path.is_empty():
 		return ge_a.resource_path == ge_b.resource_path
 	return ge_a == ge_b
+
+func _sync_stack_count(entry: Dictionary) -> void:
+	for mod in entry.spec.modifiers:
+		var attr_set := _find_attribute_set(mod.attr_name)
+		if attr_set != null:
+			attr_set.update_modifier_stack_count(mod.attr_name, entry.handle, entry.stack_count)
