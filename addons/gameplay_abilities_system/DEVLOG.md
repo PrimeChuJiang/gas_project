@@ -1254,3 +1254,72 @@ is_snapshot=false 只实时到 apply 时刻——非快照 AttributeBased modifi
 tag 祖先计数 O(1)、首跳立即开关（bExecutePeriodicEffectOnApplication）、
 SetByCaller key 换 tag（等层级校验有真实需求）、INSTANT 结算的 spec 级改写
 （急速缩短跳间隔——第 16 节"账本唯一出处"原则的伏笔）、docstring/日志清理类小活。
+
+---
+
+## 19. Stacking：叠层策略（2026-08-08 关账）
+
+### 问题本质
+
+"同一个 GE 重复施加"以前只有一种答案：再挂一条 pile，无限叠（连按 2 风暴之盾
+= 攻击 +100 的已知问题）。Stacking 给重复施加立规矩：**上限、刷新、层数怎么
+进聚合器的账、到期时层怎么走**。
+UE 对照：FGameplayEffectStackingPolicy（叠层类型 AggregateBySource/Target、
+StackBySource）+ StackingExpirationPolicy（ClearEntireStack / RemoveSingleStack /
+RefreshDuration）+ StackLimitCount。
+
+### 渐进历程（本课全程"一步一步来"，接受每步重构上一步）
+
+1. **REJECT_DUPLICATE（同 id 拒绝）**：`stack_policy` 字段 + `_same_ge` 身份判定。
+   身份用 `resource_path`（磁盘资源稳定唯一）+ 引用兜底——策划无可忘配置。
+   期间抓出 `get_rid()` 恒返回 RID(0) 的潜伏 bug（自定义 Resource 无真实身份，
+   任意两个资源"相等"）——单一场景数字对、差异化验证才现形；
+2. **LIMITED（上限 N）**：REJECT 重构为 `LIMITED + stack_limit`（默认 1 = 旧行为）；
+   叠层检查挪到取号前（先验后发，被拒不消耗句柄号）；
+3. **REFRESH_DURATION（刷新时长）**：同身份重复施加 = 重置 remaining_time +
+   返回原 handle（同一张票）。不刷新则到期时刻不后移，数字可直接对照；
+4. **合并叠层（层数进账页）**：单条目 + `stack_count` + `GASModifierPile.stack_count`
+   + evaluate 的 ADD 乘层数 + `_sync_stack_count` 同步。LIMITED 与 REFRESH 都
+   合并（分野：LIMITED 不续时长，REFRESH 续）；
+5. **到期策略（方案 A）**：到期分支按 `expiration_policy`——REMOVE_SINGLE 且
+   count>1 掉一层续满时长（**不续则同帧连环掉层 = CLEAR_ENTIRE**），否则整条移除。
+   主动移除（remove_active_effect）永远整条——"到期策略是时间到了的政策，
+   不该劫持主动动作"（UE 同款）；死代码 `_remove_entire_stack` 删除（合并世界
+   单条目，整叠清 = 删那一条）；
+6. **层数查询**：`get_stack_count(handle)`，查无此票返回 0。
+
+### 踩的坑
+
+1. **get_rid() 恒真比较**：`get_rid()` 是 GPU 底层资源句柄，自定义 Resource 一律
+   RID(0)——两个不同 GE"相等"，跨 GE 误拒。探针脚本实测实锤；教训：**单一场景
+   数字对 ≠ 机制对，差异化验证才让潜伏 bug 现形**（Bug 3 同款课）；
+2. **pile.stack_count 无写入点**：evaluate 学会了 ×count，但叠层只改了条目计数，
+   pile 恒 1——合并后叠层数字反而比独立条目时代更小（+50 不是 +100）。grep
+   全项目找写入点是基本功；
+3. **首次施加空字典取键**：`var entry = {}` + `entry.stack_count` → null 比较崩。
+   `is_empty()` 判空；
+4. **掉层不续时长**：remaining_time 不重置 → 下一帧又到期 → 同帧连环掉层，
+   REMOVE_SINGLE 变成 CLEAR_ENTIRE。续时长是必须项不是选项；
+5. **测试代码被拒也领号**：apply 返回 -1 时测试代码无脑入 handle 列表，Minus
+   弹出无效票。门票机制在测试侧也要守。
+
+### 验收记录
+
+| # | 用例 | 期望 | 结果 |
+|---|---|---|---|
+| 1 | 盾 limit=3 连按 4 次 | 150/200/250/第 4 次拒 | ✓ |
+| 2 | 差异化：盾挂着时 Q 可施加 | 不同 GE 独立计数 | ✓ |
+| 3 | REFRESH：Q 二次施加 | Attack 150 保持 + 同 handle + 到期时刻后移 | ✓ |
+| 4 | 合并叠层 | 150→200→250 同 handle，get_stack_count 1→2→3 | ✓ |
+| 5 | REMOVE_SINGLE 逐层 | 3 层 3s：250→200→150→100（每层各活 3s）| ✓ |
+| 6 | 主动移除整条 | Minus → 一次回基础值 | ✓ |
+| 7 | get_stack_count 查无票 | -1 → 0 | ✓ |
+| 8 | 回归 F 键 | 全绿（默认 stack_count=1 乘 1 无感）| ✓ |
+
+### 遗留
+
+- **叠层类型**（AggregateBySource / AggregateByTarget / StackBySource——"谁算
+  一层"）未做：第一课只做上限+到期，正交部分留待需求；
+- MULTIPLY/DIVIDE 不乘层数（只 ADD——叠层 buff 99% 是 ADD，遇到再说）；
+- 周期 GE + 叠层的 period 计时策略（UE 的 StackPeriodResetPolicy）未做；
+- 下一课排队：**GameplayCue**（第二梯队，`gameplay_cue_tags` 躺了十几节没人消费）。

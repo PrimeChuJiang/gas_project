@@ -282,7 +282,7 @@ func _input(event: InputEvent):
 			if handle != GASAbilitySystemComponent.INVALID_HANDLE:
 				test_ge_handles.append(handle)
 				old_handle = handle
-			GameLogger.info("TestScene", "get ge handle: " + str(handle))
+			GameLogger.info("TestScene", "get ge handle: " + str(handle) + " stack_count: " + str(asc.get_stack_count(handle)))
 		"Minus":
 			if test_ge_handles.is_empty(): return
 			var handle = test_ge_handles[test_ge_handles.size()-1]

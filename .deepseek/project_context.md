@@ -27,35 +27,30 @@ Godot 4.7（Forward Plus）下用 GDScript 复刻 UE GameplayAbilitySystem 单�
 7. ExecutionCalculation：多属性攻防结算 + 小票 EvaluatedData + DoT 实时结算
    + 木桩（第 15-16 节）
 
-## 当前进度（2026-08-08 晚）
+## 当前进度（2026-08-08 深夜）
 
-- **最近一次提交**：`585d046`（聚合器第二步关账，已 push）；第三阶段代码与文档待提交
-- **课程：聚合器（第 17 节）三阶段全部关账**（2026-08-08）：
-  - ✅ 第一步"先抽不改"：`_evaluate()` → `static evaluate(base, modifiers)`，
-    current_value 走它；安检门全键回归通过（一个数不变）
-  - ✅ 第二步 B 方案（聚合一次）：三本账并成一本——`apply_modifiers_to_base`
-    唯一落账漏斗；INSTANT 与周期跳合并 `_apply_effect_modifiers`；execution
-    拆 target/source 双桶；ADD-only 哨兵拆除
-  - ✅ 类型化重构：GASModifierPile（op/magnitude/handle）+ GASModifierBucket
-    （GDScript 禁嵌套类型化集合 → 薄持有类）；账本/参数全换
-    `Array[GASModifierPile]`，evaluate 函数体零改动
-  - ✅ 验证目标 1/2/3 全绿：回归全键；INSTANT MULTIPLY -0.5 → 500→250；
-    execution 非 ADD 小票 → npc 500→250
-  - ✅ 第三阶段依赖登记簿：簿挂"被读属性的家"（from_target ? self :
-    source_asc，跨墙不拉信号线）；条目 {asc, attr_name, handle, mod_spec}；
-    `_recalc_stack` 环保护（看得见不处理）；`_cleanup_effect` 按 handle 拆线；
-    新增 set_modifier_magnitude / update_modifier_magnitude / effect_spec back-ref
-  - ✅ 验证目标 4/5 全绿：两段对照（110→125 跟涨 / 回落 110，"定死"假设两次
-    死刑）+ 拆线终局（buff 到期后改 Attack，Armor 纹丝不动无日志）
-  - 已决：DIVIDE 保留 1+m 语义（166 事件复盘：÷2 写 1.0）；依赖环第一课
-    只 warn 不处理
-- **下一课**（路线图第一梯队第 2 位）：**Stacking**——同一 GE 叠 N 层：
-  层数上限、到期策略（刷新时长 / 重置周期 / 逐层过期）、叠层数怎么进聚合器的账
-  （N 层 = N 条 modifier 还是 1 条 × N？）。UE 对照 FGameplayEffectStackingPolicy。
-  连按 2 无限叠 buff 的已知问题在此正法
-- **路线图**（第 18 节，不变）：第一梯队 Stacking → 第二梯队 GameplayCue →
-  更多 Task → TargetData；第三梯队 Tag 门禁（免疫/暂停/驱散）→ Ability 间
-  tag 关系；选修 GE Level 曲线；**网络同步明确不做**；加餐池照旧
+- **最近一次提交**：`68f0c84`（Stacking 到期策略）；聚合器三阶段 + Stacking 全部代码已提交本地（远端由用户同步）
+- **课程：聚合器（第 17 节）三阶段全部关账**（2026-08-08）：见上（第一步/第二步/第三阶段依赖登记簿，验证目标 1-5 全绿）
+- **课程：Stacking（第 19 节）关账**（2026-08-08，渐进式六步）：
+  - ✅ 身份判定 `_same_ge`（resource_path + 引用兜底，策划无可忘配置）；
+    抓出 get_rid() 恒 RID(0) 潜伏 bug
+  - ✅ `stack_policy`：NONE / LIMITED（+stack_limit，默认 1）/ REFRESH_DURATION；
+    先验后发（检查在取号前）
+  - ✅ 合并叠层：单条目 + stack_count + pile.stack_count + evaluate ADD ×count
+    + `_sync_stack_count` 同步（与依赖登记簿互不冲突：重算写单层量）
+  - ✅ 到期策略（方案 A）：REMOVE_SINGLE 掉层续满时长（不续=同帧连环掉层）/
+    CLEAR_ENTIRE 整条删；主动移除永远整条（"到期策略不劫持主动动作"）
+  - ✅ `get_stack_count(handle)` 层数查询（查无票返回 0）
+  - ✅ 验证：LIMITED 上限、REFRESH 刷新、合并叠层同 handle、REMOVE_SINGLE
+    逐层 250→200→150→100、主动移除整条、F 回归全绿
+  - 已决：LIMITED=合并不续时长、REFRESH=合并+续时长+满层纯刷新（用户语义）；
+    MULTIPLY/DIVIDE 不乘层数；叠层类型（AggregateBySource 等）未做
+- **下一课**（第二梯队第 1 位）：**GameplayCue**——`gameplay_cue_tags` 躺了
+  十几节没人消费：OnActive / WhileActive / OnRemoved 三时刻，INSTANT 一次性 cue
+  与 DURATION 持续 cue；原则预告：**逻辑不许知道表现存在**（信号只出不进）
+- **路线图**（第 18 节，不变）：第一梯队 ✅ → GameplayCue → 更多 Task →
+  TargetData；第三梯队 Tag 门禁（免疫/暂停/驱散）→ Ability 间 tag 关系；
+  选修 GE Level 曲线；**网络同步明确不做**；加餐池照旧
   （tag 祖先计数 O(1)、首跳立即开关、SetByCaller key 换 tag、spec 级改写等）
 
 ## 核心架构速记（讲思路时的参照）

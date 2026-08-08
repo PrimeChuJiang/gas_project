@@ -164,6 +164,13 @@ func cancel_ability(ability: GASGameplayAbility):
 	if _active_abilities.has(ability):
 		ability.end_ability(true)
 
+# 获取GE堆叠层数
+func get_stack_count(handle: int) -> int:
+	for entry in _active_effects:
+		if entry.handle == handle:
+			return entry.stack_count
+	return 0
+
 func _ready():
 	set_process(true)
 
