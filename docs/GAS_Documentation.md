@@ -705,35 +705,35 @@ func get_target_data_in_radius(center, radius):
 addons/gameplay_tags/                    # Tag 插件（独立）
 ├── gameplay_tags.gd                     # EditorPlugin：注册 autoload / 底部面板 / Inspector
 └── scripts/
-    ├── gameplay_tag_manager.gd          # 单例：双轨索引（哈希 + 多叉树）+ 享元池
-    ├── structure/                       # f_gameplay_tag / f_gameplay_tag_container
-    │                                    # / f_gameplay_tag_node / multi_way_tree
-    └── resources/gameplay_tag_list.gd   # cfg 文件读写
+	├── gameplay_tag_manager.gd          # 单例：双轨索引（哈希 + 多叉树）+ 享元池
+	├── structure/                       # f_gameplay_tag / f_gameplay_tag_container
+	│                                    # / f_gameplay_tag_node / multi_way_tree
+	└── resources/gameplay_tag_list.gd   # cfg 文件读写
 
 addons/gameplay_abilities_system/
 ├── plugin.cfg
 ├── gameplay_abilities_system.gd         # EditorPlugin 入口
 └── scripts/
-    ├── enums.gd                         # DurationPolicy / ModifierOp / Stacking...
-    ├── attribute_data.gd                # 单个属性（evaluate 聚合权威）
-    ├── attribute_set.gd                 # 属性集（Pre 钳制 / Post 连锁钩子）
-    ├── gameplay_effect.gd               # GE 配方
-    ├── gameplay_effect_modifier.gd      # 一条修改指令
-    ├── gameplay_effect_spec.gd          # GE 实例
-    ├── gameplay_effect_context.gd       # 效果上下文
-    ├── gameplay_effect_capture_definition.gd  # 捕获声明
-    ├── gameplay_tag_requirements.gd     # 门禁条件（application / ongoing）
-    ├── ability_system_component.gd      # ASC 核心（大脑）
-    ├── gameplay_ability.gd              # 能力类
-    ├── ability_task.gd                  # 异步任务基类
-    ├── ability_task_delay.gd            # 延时任务
-    ├── modifier_pile.gd                 # 租约账页条目（op/magnitude/handle/层数/挂起）
-    ├── modifier_bucket.gd               # 装配分组容器
-    ├── modifier_spec.gd                 # modifier 运行时账页（resolved/value）
-    ├── modifier_evaluated_data.gd       # execution 输出小票
-    ├── modifier_magnitude/              # magnitude 家族（4 个子类）
-    ├── execution_calculation/           # 执行器基类
-    └── test/                            # TestScene + 测试 GE/能力 + 一键回归
+	├── enums.gd                         # DurationPolicy / ModifierOp / Stacking...
+	├── attribute_data.gd                # 单个属性（evaluate 聚合权威）
+	├── attribute_set.gd                 # 属性集（Pre 钳制 / Post 连锁钩子）
+	├── gameplay_effect.gd               # GE 配方
+	├── gameplay_effect_modifier.gd      # 一条修改指令
+	├── gameplay_effect_spec.gd          # GE 实例
+	├── gameplay_effect_context.gd       # 效果上下文
+	├── gameplay_effect_capture_definition.gd  # 捕获声明
+	├── gameplay_tag_requirements.gd     # 门禁条件（application / ongoing）
+	├── ability_system_component.gd      # ASC 核心（大脑）
+	├── gameplay_ability.gd              # 能力类
+	├── ability_task.gd                  # 异步任务基类
+	├── ability_task_delay.gd            # 延时任务
+	├── modifier_pile.gd                 # 租约账页条目（op/magnitude/handle/层数/挂起）
+	├── modifier_bucket.gd               # 装配分组容器
+	├── modifier_spec.gd                 # modifier 运行时账页（resolved/value）
+	├── modifier_evaluated_data.gd       # execution 输出小票
+	├── modifier_magnitude/              # magnitude 家族（4 个子类）
+	├── execution_calculation/           # 执行器基类
+	└── test/                            # TestScene + 测试 GE/能力 + 一键回归
 ```
 
 ### 13.3 实现状态（2026-08 更新）

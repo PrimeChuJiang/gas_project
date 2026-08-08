@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="GASGameplayEffect" format=3 uid="uid://dgn000000014a"]
+
+[ext_resource type="Script" uid="uid://bmi3sw3w3ymx8" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect.gd" id="1_eff"]
+[ext_resource type="Script" uid="uid://duyreunis5mf7" path="res://addons/gameplay_tags/scripts/structure/f_gameplay_tag_container.gd" id="1_tags"]
+[ext_resource type="Script" uid="uid://c6vfd5x4ybmyw" path="res://addons/gameplay_abilities_system/scripts/execution_calculation/gameplay_execution_calculation.gd" id="1_yqrqs"]
+[ext_resource type="Script" uid="uid://defg8fw8hdubq" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_modifier.gd" id="3_gf3cb"]
+[ext_resource type="Script" uid="uid://r1bokvajql3r" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_capture_definition.gd" id="4_4vp1d"]
+
+[sub_resource type="Resource" id="Resource_tags"]
+script = ExtResource("1_tags")
+_saved_tag_names = Array[StringName]([&"Ability.Spell.Fireball.Cooldown"])
+
+[resource]
+script = ExtResource("1_eff")
+duration_policy = 1
+duration = 4.0
+granted_tag = SubResource("Resource_tags")
+comment = "火球术冷却：4 秒（granted_tag 门禁阻止再次激活）"
+metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="GASGameplayEffect" format=3 uid="uid://dgn000000026a"]
+
+[ext_resource type="Script" uid="uid://bmi3sw3w3ymx8" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect.gd" id="1_eff"]
+[ext_resource type="Script" uid="uid://duyreunis5mf7" path="res://addons/gameplay_tags/scripts/structure/f_gameplay_tag_container.gd" id="1_tags"]
+
+[sub_resource type="Resource" id="Resource_tags"]
+script = ExtResource("1_tags")
+_saved_tag_names = Array[StringName]([&"Ability.Spell.Shield.Cooldown"])
+
+[resource]
+script = ExtResource("1_eff")
+duration_policy = 1
+duration = 4.0
+granted_tag = SubResource("Resource_tags")
+comment = "护盾术冷却：4 秒"
+metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"

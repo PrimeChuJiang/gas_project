@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="GASGameplayEffect" format=3 uid="uid://dgn000000021a"]
+
+[ext_resource type="Script" uid="uid://bmi3sw3w3ymx8" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect.gd" id="1_eff"]
+[ext_resource type="Script" uid="uid://c6vfd5x4ybmyw" path="res://addons/gameplay_abilities_system/scripts/execution_calculation/gameplay_execution_calculation.gd" id="1_kpw6y"]
+[ext_resource type="Script" uid="uid://m5x7nbfvllco" path="res://addons/gameplay_abilities_system/scripts/modifier_magnitude/modifier_magnitude_scalable_float.gd" id="1_mag"]
+[ext_resource type="Script" uid="uid://defg8fw8hdubq" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_modifier.gd" id="1_mod"]
+[ext_resource type="Script" uid="uid://duyreunis5mf7" path="res://addons/gameplay_tags/scripts/structure/f_gameplay_tag_container.gd" id="1_tags"]
+[ext_resource type="Script" uid="uid://r1bokvajql3r" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_capture_definition.gd" id="5_o720p"]
+
+[sub_resource type="Resource" id="Resource_tags"]
+script = ExtResource("1_tags")
+_saved_tag_names = Array[StringName]([&"State.Debuff.Slow"])
+
+[sub_resource type="Resource" id="Resource_mag"]
+script = ExtResource("1_mag")
+value = -2.0
+metadata/_custom_type_script = "uid://m5x7nbfvllco"
+
+[sub_resource type="Resource" id="Resource_mod"]
+script = ExtResource("1_mod")
+attr_name = &"Move"
+magnitude = SubResource("Resource_mag")
+metadata/_custom_type_script = "uid://defg8fw8hdubq"
+
+[resource]
+script = ExtResource("1_eff")
+duration_policy = 1
+duration = 6.0
+modifiers = Array[ExtResource("1_mod")]([SubResource("Resource_mod")])
+granted_tag = SubResource("Resource_tags")
+comment = "冰霜新星：6 秒内怪物 Move -2（Move≤0 无法接近英雄）"
+metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"

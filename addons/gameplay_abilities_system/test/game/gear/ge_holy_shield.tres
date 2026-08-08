@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="GASGameplayEffect" format=3 uid="uid://dgn000000005a"]
+
+[ext_resource type="Script" uid="uid://bmi3sw3w3ymx8" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect.gd" id="1_eff"]
+[ext_resource type="Script" uid="uid://defg8fw8hdubq" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_modifier.gd" id="1_mod"]
+[ext_resource type="Script" uid="uid://m5x7nbfvllco" path="res://addons/gameplay_abilities_system/scripts/modifier_magnitude/modifier_magnitude_scalable_float.gd" id="1_mag"]
+
+[sub_resource type="Resource" id="Resource_mag_atk"]
+script = ExtResource("1_mag")
+value = 10.0
+metadata/_custom_type_script = "uid://m5x7nbfvllco"
+
+[sub_resource type="Resource" id="Resource_mod_atk"]
+script = ExtResource("1_mod")
+attr_name = &"Attack"
+magnitude = SubResource("Resource_mag_atk")
+metadata/_custom_type_script = "uid://defg8fw8hdubq"
+
+[sub_resource type="Resource" id="Resource_mag_def"]
+script = ExtResource("1_mag")
+value = 20.0
+metadata/_custom_type_script = "uid://m5x7nbfvllco"
+
+[sub_resource type="Resource" id="Resource_mod_def"]
+script = ExtResource("1_mod")
+attr_name = &"Defense"
+magnitude = SubResource("Resource_mag_def")
+metadata/_custom_type_script = "uid://defg8fw8hdubq"
+
+[resource]
+script = ExtResource("1_eff")
+duration_policy = 2
+modifiers = Array[ExtResource("1_mod")]([SubResource("Resource_mod_def"), SubResource("Resource_mod_atk")])
+comment = "圣盾：Defense +20，Attack +10（多属性耦合）"
+metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"

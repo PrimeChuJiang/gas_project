@@ -1148,9 +1148,10 @@ is_snapshot=false 只实时到 apply 时刻——非快照 AttributeBased modifi
   发生，跨墙信号线一根不用拉。UE 的 `AttributeDependencies` 挂在持有 ActiveGE
   的 target 容器、事件线只认本家——跨 ASC 的非快照依赖是 UE 的已知薄弱点，
   我们绕开它的姿势就是"簿随事件走"；
-- **条目**：`{asc, attr_name, handle, mod_spec}`，键 = 被读属性名；
-  重算 = `magnitude_def._calculate(effect_spec)` → `asc.find_attribute_set(...)
+- **条目**：`{asc, attr_name, handle, mod_spec, spec}`，键 = 被读属性名；
+  重算 = `magnitude_def._calculate(dep.spec)` → `asc.find_attribute_set(...)
   .update_modifier_magnitude(...)`；
+  （`spec` 直接进条目而不是让 `GASModifierSpec` 回引——见下方"补课：循环引用泄漏"）
 - **登记条件与挂账同门**（`period == 0` + `is AttributeBased` + 非快照）——
   登记簿只服务常驻账页；INSTANT 落账即散、周期 GE 每跳重跑配方，都不需要；
 - **环保护**：`_recalc_stack` 链上已见 → warn + 返回（看得见，不处理）。
@@ -1161,7 +1162,7 @@ is_snapshot=false 只实时到 apply 时刻——非快照 AttributeBased modifi
 
 `GASAttributeDATA.set_modifier_magnitude`（账页第三操作：挂/摘/改）、
 `GASAttributeSet.update_modifier_magnitude`（白卷不发地发信号）、
-`GASModifierSpec.effect_spec`（back-ref，重算够得到配方）。
+依赖条目内联 `spec`（见"补课：循环引用泄漏"，取代旧的 back-ref 方案）。
 
 #### 踩的坑
 
@@ -1400,7 +1401,62 @@ RefreshDuration）+ StackLimitCount。
   验证（跨源独立栈、免疫拒收）成为机制取证标配；
 - **不要画蛇添足**：每一个新字段先问"和现状有什么区别"——答不上来就是不做。
 
+## 补课：循环引用泄漏与 Curve 钳制坑（2026-08-09，测试场景重构期间）
+
+### 1. Spec 循环引用泄漏（框架级修复）
+
+**现象**：headless 回归退出时报 `405 ObjectDB instances were leaked`，
+且泄漏实例全是 `GASEffectSpec / GASModifierSpec` 的属性名。
+
+**根因**：`GASModifierSpec._init` 里 `effect_spec = spec` 回引——
+`spec.modifiers → mod_spec → spec` 是 RefCounted 循环，引用计数永不归零，
+每次 `apply_gameplay_effect_spec`（含 `_check_cost` 里造了不用的 spec）都泄漏一组。
+
+**修法**：删掉回引，让依赖登记簿直接持有 spec——
+`_attribute_dependencies` 条目加 `"spec": spec`，重算改 `dep.spec`。
+语义等价（重算本来就需要"活的配方"），循环消失，泄漏 405 → 0。
+
+**教训**：RefCounted 双向引用 = 慢性泄漏。Node 可以靠树负责生命周期，
+RefCounted 只有引用计数一条命——**跨对象回引要么弱引用，要么由持有方显式托管**。
+
+### 2. Godot 4.7 Curve 值域钳制坑
+
+**现象**：代码建 `Curve` 并 `add_point(Vector2(0, -10))` 后 `sample` 恒为 0。
+
+**根因**：4.7 起 `Curve._add_point` 会把坐标钳制进 min/max 值域
+（默认 `min_domain/min_value = 0, max_domain/max_value = 1`）——
+负值/超 1 的坐标被静默归一。.tres 序列化带 limits 所以旧资源没踩到。
+
+**修法**：框架提供安全入口
+`GASModifierMagnitudeScalableFloat.set_level_curve_from_points(PackedVector2Array)`：
+先按传入点的实际范围拓宽 domain/value limits，再逐点添加。
+
+**教训**：引擎资源类的"合理默认"也可能吃掉数据——代码建资源时先查 setter 语义，
+探针（`print(curve.get_point_position(0))`）一击定位。
+
+### 3. 附记：headless 下 UI 主题缓存泄漏（引擎级，非本项目）
+
+空 UI 场景（仅 CanvasLayer + Label，无任何游戏代码）headless 退出同样报
+`26 instances leaked`——Godot 4.7 headless 模式的 Control/主题缓存退出不冲刷。
+判定方法：最小对照探针（无 UI = 0，有 UI = 26）。与项目代码无关，不修。
+
 ### 下一课排队
 
 **GameplayCue**（第二梯队）——`gameplay_cue_tags` 躺了十几节没人消费：
 OnActive / WhileActive / OnRemoved 三时刻，逻辑不许知道表现存在。
+
+## Demo 里程碑：TestScene 从"插件验证器"到"可展示的桌游"（2026-08-09）
+
+- **素材**：game-icons.net（CC BY 3.0，Lorc/Delapouite 等）35 个 SVG 入
+  `assets/game-icons.net/`，附 LICENSE.txt；卡牌边框/面板全部 StyleBoxFlat 程序化，
+  零素材依赖也能跑；
+- **交互**：鼠标优先（点格子移动、点怪物选目标、点技能卡施放、点装备槽换装、
+  hover 提示、冷却/不可用灰化标注），键盘保留兼容（1~8 对应手牌）；
+- **布局**：`--ui-check` 程序化越界检查（headless 先 `get_window().size` 再量 rect），
+  修掉"子面板最小宽度总和 > 窗口 → 根容器被撑大居中偏移"的经典容器坑；
+- **工程设置**：`run/main_scene` 指向 TestScene（F5 即玩，顺带消灭
+  "no main scene" 启动报错）+ 窗口最小尺寸 1152×648；
+- **教训**：headless 视口默认 64×64，一切布局断言都要先设窗口尺寸；
+  渲染验证可用 `--write-movie dir/frame.png`（movie writer 按固定 FPS 输出 PNG 序列），
+  比 `get_viewport().get_texture().get_image()` 稳（后者在 Forward+ 下会卡死）。
+

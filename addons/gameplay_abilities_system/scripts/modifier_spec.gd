@@ -4,16 +4,16 @@ extends RefCounted
 var attr_name: StringName
 var op: GASEnums.ModifierOp
 var magnitude_def: GASModifierMagnitude
-var effect_spec: GASEffectSpec
 var resolved: bool = false
 var value: float = 0.0
 
+# 注意：不保存 effect_spec 回引——GASEffectSpec.modifiers → GASModifierSpec → spec
+# 会形成 RefCounted 循环引用导致内存泄漏。重算需要 spec 时由依赖登记簿直接持有。
 
 func _init(mod: GEModifier, spec: GASEffectSpec):
 	attr_name = mod.attr_name
 	op = mod.op
 	magnitude_def = mod.magnitude
-	effect_spec = spec
 	if mod.magnitude.is_snapshot():
 		resolve(spec)
 

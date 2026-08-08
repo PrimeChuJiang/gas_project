@@ -101,7 +101,8 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 						"asc":self,
 						"attr_name": mod_spec.attr_name,
 						"handle": handle,
-						"mod_spec": mod_spec
+						"mod_spec": mod_spec,
+						"spec": spec
 					})
 		if not spec.effect_def.executions.is_empty():
 			if spec.period <= 0:
@@ -349,7 +350,7 @@ func _recalculate_dependencies(attr_name: StringName) -> void:
 		return
 	_recalc_stack.append(attr_name)
 	for dep in _attribute_dependencies[attr_name]:
-		var new_magnitude: float = dep.mod_spec.magnitude_def._calculate(dep.mod_spec.effect_spec)
+		var new_magnitude: float = dep.mod_spec.magnitude_def._calculate(dep.spec)
 		var attr_set: GASAttributeSet = dep.asc.find_attribute_set(dep.attr_name)
 		if attr_set:
 			attr_set.update_modifier_magnitude(dep.attr_name, dep.handle, new_magnitude)

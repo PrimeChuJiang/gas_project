@@ -1,70 +1,275 @@
 [gd_scene format=3 uid="uid://cbqphno8c1pkg"]
 
-[ext_resource type="Script" uid="uid://c40q7msjow4bn" path="res://addons/gameplay_abilities_system/test/test_gameplay_effect.gd" id="1_cttfp"]
-[ext_resource type="Script" uid="uid://ivgkxfsymie0" path="res://addons/gameplay_abilities_system/scripts/ability_system_component.gd" id="1_xpkb0"]
+[ext_resource type="Script" uid="uid://dgn000000032a" path="res://addons/gameplay_abilities_system/test/dungeon_scene.gd" id="1_scene"]
 
-[node name="TestScene" type="Node2D" unique_id=2097542060]
-script = ExtResource("1_cttfp")
+[sub_resource type="StyleBoxFlat" id="panel_hero"]
+content_margin_left = 12.0
+content_margin_top = 10.0
+content_margin_right = 12.0
+content_margin_bottom = 10.0
+bg_color = Color(0.1, 0.12, 0.16, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.35, 0.45, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
 
-[node name="ASC" type="Node" parent="." unique_id=345522062]
-script = ExtResource("1_xpkb0")
+[sub_resource type="StyleBoxFlat" id="btn_endturn"]
+content_margin_left = 18.0
+content_margin_top = 8.0
+content_margin_right = 18.0
+content_margin_bottom = 8.0
+bg_color = Color(0.2, 0.24, 0.3, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.5, 0.58, 0.7, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
 
-[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=811854151]
+[sub_resource type="StyleBoxFlat" id="btn_endturn_hover"]
+content_margin_left = 18.0
+content_margin_top = 8.0
+content_margin_right = 18.0
+content_margin_bottom = 8.0
+bg_color = Color(0.28, 0.34, 0.42, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.7, 0.8, 0.95, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
 
-[node name="HBoxContainer" type="HBoxContainer" parent="CanvasLayer" unique_id=1307700835]
-offset_right = 40.0
-offset_bottom = 40.0
+[sub_resource type="StyleBoxFlat" id="panel_monsters"]
+content_margin_left = 10.0
+content_margin_top = 10.0
+content_margin_right = 10.0
+content_margin_bottom = 10.0
+bg_color = Color(0.14, 0.1, 0.12, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.45, 0.28, 0.3, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
 
-[node name="VBoxContainer" type="VBoxContainer" parent="CanvasLayer/HBoxContainer" unique_id=1249261018]
+[sub_resource type="StyleBoxFlat" id="panel_board"]
+content_margin_left = 12.0
+content_margin_top = 12.0
+content_margin_right = 12.0
+content_margin_bottom = 12.0
+bg_color = Color(0.09, 0.1, 0.13, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.28, 0.32, 0.38, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="panel_hand"]
+content_margin_left = 10.0
+content_margin_top = 8.0
+content_margin_right = 10.0
+content_margin_bottom = 8.0
+bg_color = Color(0.1, 0.09, 0.12, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.32, 0.3, 0.42, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[node name="TestScene" type="Node2D" unique_id=1603956186]
+script = ExtResource("1_scene")
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1091318643]
+
+[node name="Root" type="MarginContainer" parent="CanvasLayer" unique_id=2060630253]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 8.0
+offset_right = -10.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MainVBox" type="VBoxContainer" parent="CanvasLayer/Root" unique_id=1983901869]
 layout_mode = 2
+theme_override_constants/separation = 8
 
-[node name="HealthLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer" unique_id=2081026051]
+[node name="TopBar" type="HBoxContainer" parent="CanvasLayer/Root/MainVBox" unique_id=1046509862]
 layout_mode = 2
+theme_override_constants/separation = 10
 
-[node name="MaxHealthLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer" unique_id=576013526]
+[node name="PhaseBadge" type="PanelContainer" parent="CanvasLayer/Root/MainVBox/TopBar" unique_id=2051874129]
 layout_mode = 2
+theme_override_styles/panel = SubResource("panel_hero")
 
-[node name="ManaLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer" unique_id=867600538]
+[node name="PhaseLabel" type="Label" parent="CanvasLayer/Root/MainVBox/TopBar/PhaseBadge" unique_id=1463258314]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.78, 0.3, 1)
+theme_override_font_sizes/font_size = 17
 
-[node name="MaxManaLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer" unique_id=1168742517]
+[node name="TurnInfoLabel" type="Label" parent="CanvasLayer/Root/MainVBox/TopBar" unique_id=661918258]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.8, 0.88, 1)
+theme_override_font_sizes/font_size = 15
 
-[node name="ArmorLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer" unique_id=1540011599]
+[node name="Spacer" type="Control" parent="CanvasLayer/Root/MainVBox/TopBar" unique_id=1108183448]
 layout_mode = 2
+size_flags_horizontal = 3
 
-[node name="AttackLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer" unique_id=1876325470]
+[node name="EndTurnButton" type="Button" parent="CanvasLayer/Root/MainVBox/TopBar" unique_id=1694475674]
 layout_mode = 2
+theme_override_font_sizes/font_size = 15
+theme_override_styles/normal = SubResource("btn_endturn")
+theme_override_styles/pressed = SubResource("btn_endturn_hover")
+theme_override_styles/hover = SubResource("btn_endturn_hover")
+text = "结束回合 (T)"
 
-[node name="StatusLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer" unique_id=1143572196]
+[node name="PlayArea" type="HBoxContainer" parent="CanvasLayer/Root/MainVBox" unique_id=788944646]
 layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 8
 
-[node name="TagLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer" unique_id=1514353870]
+[node name="PanelHero" type="PanelContainer" parent="CanvasLayer/Root/MainVBox/PlayArea" unique_id=1301568925]
+custom_minimum_size = Vector2(240, 0)
 layout_mode = 2
+theme_override_styles/panel = SubResource("panel_hero")
 
-[node name="VBoxContainer2" type="VBoxContainer" parent="CanvasLayer/HBoxContainer" unique_id=1390855303]
+[node name="HeroVBox" type="VBoxContainer" parent="CanvasLayer/Root/MainVBox/PlayArea/PanelHero" unique_id=1353960058]
 layout_mode = 2
+theme_override_constants/separation = 6
 
-[node name="NPCHealthLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer2" unique_id=1443992202]
+[node name="HeroHeader" type="HBoxContainer" parent="CanvasLayer/Root/MainVBox/PlayArea/PanelHero/HeroVBox" unique_id=349993580]
 layout_mode = 2
+theme_override_constants/separation = 8
 
-[node name="NPCMaxHealthLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer2" unique_id=41642197]
+[node name="Portrait" type="TextureRect" parent="CanvasLayer/Root/MainVBox/PlayArea/PanelHero/HeroVBox/HeroHeader" unique_id=2037502651]
+custom_minimum_size = Vector2(52, 52)
 layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
 
-[node name="NPCManaLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer2" unique_id=806386652]
+[node name="HeroNameBox" type="VBoxContainer" parent="CanvasLayer/Root/MainVBox/PlayArea/PanelHero/HeroVBox/HeroHeader" unique_id=1965014182]
 layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
 
-[node name="NPCMaxManaLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer2" unique_id=998274315]
+[node name="HeroNameLabel" type="Label" parent="CanvasLayer/Root/MainVBox/PlayArea/PanelHero/HeroVBox/HeroHeader/HeroNameBox" unique_id=1158318631]
 layout_mode = 2
+theme_override_font_sizes/font_size = 17
 
-[node name="NPCArmorLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer2" unique_id=672302798]
+[node name="LevelLabel" type="Label" parent="CanvasLayer/Root/MainVBox/PlayArea/PanelHero/HeroVBox/HeroHeader/HeroNameBox" unique_id=1718040586]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.7, 0.8, 1)
+theme_override_font_sizes/font_size = 12
 
-[node name="NPCAttackLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer2" unique_id=665571238]
+[node name="BodyBar" type="ProgressBar" parent="CanvasLayer/Root/MainVBox/PlayArea/PanelHero/HeroVBox" unique_id=1167381089]
+custom_minimum_size = Vector2(0, 14)
 layout_mode = 2
+show_percentage = false
 
-[node name="NPCStatusLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer2" unique_id=1274618995]
+[node name="MindBar" type="ProgressBar" parent="CanvasLayer/Root/MainVBox/PlayArea/PanelHero/HeroVBox" unique_id=722133806]
+custom_minimum_size = Vector2(0, 14)
 layout_mode = 2
+show_percentage = false
 
-[node name="NPCTagLabel" type="Label" parent="CanvasLayer/HBoxContainer/VBoxContainer2" unique_id=1782683753]
+[node name="StatsLabel" type="Label" parent="CanvasLayer/Root/MainVBox/PlayArea/PanelHero/HeroVBox" unique_id=1711782613]
 layout_mode = 2
+theme_override_font_sizes/font_size = 13
+autowrap_mode = 3
+
+[node name="GearLabel" type="Label" parent="CanvasLayer/Root/MainVBox/PlayArea/PanelHero/HeroVBox" unique_id=2027183411]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.82, 0.6, 1)
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 3
+
+[node name="StatusRow" type="HBoxContainer" parent="CanvasLayer/Root/MainVBox/PlayArea/PanelHero/HeroVBox" unique_id=1550025300]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="PanelMonsters" type="PanelContainer" parent="CanvasLayer/Root/MainVBox/PlayArea" unique_id=766247894]
+custom_minimum_size = Vector2(250, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("panel_monsters")
+
+[node name="MonsterVBox" type="VBoxContainer" parent="CanvasLayer/Root/MainVBox/PlayArea/PanelMonsters" unique_id=842310240]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="MonsterTitle" type="Label" parent="CanvasLayer/Root/MainVBox/PlayArea/PanelMonsters/MonsterVBox" unique_id=539180482]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.65, 0.62, 1)
+theme_override_font_sizes/font_size = 14
+
+[node name="PanelBoard" type="PanelContainer" parent="CanvasLayer/Root/MainVBox/PlayArea" unique_id=873731699]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("panel_board")
+
+[node name="BoardVBox" type="VBoxContainer" parent="CanvasLayer/Root/MainVBox/PlayArea/PanelBoard" unique_id=1263191199]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="BoardRow" type="HBoxContainer" parent="CanvasLayer/Root/MainVBox/PlayArea/PanelBoard/BoardVBox" unique_id=1519904431]
+layout_mode = 2
+theme_override_constants/separation = 4
+alignment = 1
+
+[node name="BoardHintLabel" type="Label" parent="CanvasLayer/Root/MainVBox/PlayArea/PanelBoard/BoardVBox" unique_id=630003382]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.65, 0.72, 1)
+theme_override_font_sizes/font_size = 13
+text = "点击绿色格子移动 · 点击怪物选择目标"
+horizontal_alignment = 1
+
+[node name="PanelLog" type="PanelContainer" parent="CanvasLayer/Root/MainVBox/PlayArea" unique_id=1203825876]
+custom_minimum_size = Vector2(196, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("panel_hero")
+
+[node name="LogLabel" type="RichTextLabel" parent="CanvasLayer/Root/MainVBox/PlayArea/PanelLog" unique_id=286493163]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_font_sizes/normal_font_size = 13
+bbcode_enabled = true
+
+[node name="HandPanel" type="PanelContainer" parent="CanvasLayer/Root/MainVBox" unique_id=70798241]
+layout_mode = 2
+theme_override_styles/panel = SubResource("panel_hand")
+
+[node name="HandRow" type="HBoxContainer" parent="CanvasLayer/Root/MainVBox/HandPanel" unique_id=615890615]
+layout_mode = 2
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="HandHint" type="Label" parent="CanvasLayer/Root/MainVBox/HandPanel/HandRow" unique_id=445199104]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.55, 0.62, 1)
+theme_override_font_sizes/font_size = 12
+text = "点击技能卡施放（需要目标时先点怪物）"
