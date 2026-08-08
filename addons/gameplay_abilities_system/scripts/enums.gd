@@ -21,3 +21,9 @@ enum Receiver{
 	SOURCE,
 	TARGET
 }
+
+# GE堆叠策略
+enum StackingPolicy{
+	NONE,
+	REJECT_DUPLICATE
+}

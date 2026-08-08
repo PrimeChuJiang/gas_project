@@ -51,6 +51,11 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 	elif spec.effect_def.duration_policy == GASEnums.DurationPolicy.DURATION or spec.effect_def.duration_policy == GASEnums.DurationPolicy.INFINITE:
 		var handle = _next_handle
 		_next_handle += 1
+		if spec.effect_def.stack_policy == GASEnums.StackingPolicy.REJECT_DUPLICATE:
+			for active_effect in _active_effects:
+				if _same_ge(active_effect.spec.effect_def, spec.effect_def):
+					GameLogger.warn("GameAbilitySystemComponent", "ge %s can't stack" % spec.effect_def.resource_path)
+					return INVALID_HANDLE
 		for mod in spec.modifiers:
 			var attr_set : GASAttributeSet = _find_attribute_set(mod.attr_name)
 			if attr_set != null and spec.period == 0:
@@ -302,3 +307,8 @@ func _recalculate_dependencies(attr_name: StringName) -> void:
 		if attr_set:
 			attr_set.update_modifier_magnitude(dep.attr_name, dep.handle, new_magnitude)
 	_recalc_stack.pop_back()
+
+func _same_ge(ge_a: GASGameplayEffect, ge_b: GASGameplayEffect) -> bool:
+	if not ge_a.resource_path.is_empty() and not ge_b.resource_path.is_empty():
+		return ge_a.resource_path == ge_b.resource_path
+	return ge_a == ge_b

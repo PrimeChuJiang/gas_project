@@ -279,8 +279,9 @@ func _input(event: InputEvent):
 			GameLogger.warn("TestScene", "asc._active_abilities.size = " + str(asc._active_abilities.size()))
 		"0":
 			var handle = asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_storm_shield))
-			test_ge_handles.append(handle)
-			old_handle = handle
+			if handle != GASAbilitySystemComponent.INVALID_HANDLE:
+				test_ge_handles.append(handle)
+				old_handle = handle
 			GameLogger.info("TestScene", "get ge handle: " + str(handle))
 		"Minus":
 			if test_ge_handles.is_empty(): return
@@ -293,7 +294,7 @@ func _input(event: InputEvent):
 			GameLogger.info("TestScene", "remove old_handle: " + str(old_handle) + " answer: " + str(res))
 		"Q":
 			asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_buff))
-			status_label.text = "状态: 攻击力 +20 "
+			status_label.text = "状态: 攻击力 +50 "
 		"W":
 			var handle = asc.apply_gameplay_effect_spec_to_self(asc.make_effect_spec(ge_add_max_health))
 			test_ge_handles.append(handle)

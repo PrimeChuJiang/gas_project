@@ -10,6 +10,9 @@ extends Resource
 # 周期性间隔 (0.0 = 不周期)
 @export var period: float = 0.0
 
+# 堆叠策略
+@export var stack_policy: GASEnums.StackingPolicy = GASEnums.StackingPolicy.NONE
+
 # GEModifier修改器列表
 @export var modifiers: Array[GEModifier] = []
 

@@ -1,6 +1,7 @@
 [gd_resource type="Resource" script_class="GASGameplayEffect" format=3 uid="uid://k3p48spy3bm6"]
 
 [ext_resource type="Script" uid="uid://defg8fw8hdubq" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_modifier.gd" id="1_h5bbr"]
+[ext_resource type="Script" uid="uid://c6vfd5x4ybmyw" path="res://addons/gameplay_abilities_system/scripts/execution_calculation/gameplay_execution_calculation.gd" id="1_t0wfv"]
 [ext_resource type="Script" uid="uid://bmi3sw3w3ymx8" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect.gd" id="2_6i4dd"]
 [ext_resource type="Script" uid="uid://m5x7nbfvllco" path="res://addons/gameplay_abilities_system/scripts/modifier_magnitude/modifier_magnitude_scalable_float.gd" id="2_t0wfv"]
 
@@ -19,5 +20,6 @@ metadata/_custom_type_script = "uid://defg8fw8hdubq"
 script = ExtResource("2_6i4dd")
 duration_policy = 1
 duration = 3.0
+stack_policy = 1
 modifiers = Array[ExtResource("1_h5bbr")]([SubResource("Resource_t0wfv")])
 metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"
