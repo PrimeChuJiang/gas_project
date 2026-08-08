@@ -70,38 +70,41 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 					active_effect.remaining_time = spec.duration
 					_sync_stack_count(active_effect)
 					return active_effect.handle
+		if spec.period == 0:
+			for mod_spec in spec.modifiers:
+				var attr_based := mod_spec.magnitude_def as GASModifierMagnitudeAttributeBased
+				if attr_based and not attr_based.is_snapshot() and _find_capture_def(spec.effect_def, attr_based.attr_name, attr_based.from_target) == null:
+					GameLogger.error("GameAbilitySystemComponent", "ge %s reads %s but not declared in relevant_attributes!" % [spec.effect_def.resource_path, attr_based.attr_name])
+					return INVALID_HANDLE
 		var handle = _next_handle
 		_next_handle += 1
-		for mod in spec.modifiers:
-			var attr_set : GASAttributeSet = _find_attribute_set(mod.attr_name)
+		for mod_spec in spec.modifiers:
+			var attr_set: GASAttributeSet = _find_attribute_set(mod_spec.attr_name)
 			if attr_set != null and spec.period == 0:
-				attr_set.apply_modifier(mod.attr_name, handle, mod.op, mod.get_magnitude())
-			# 如果mod是一个AttributeBased类型的数据，那么我们需要额外记录，方便后续触发Duration类型的变化的时候
-			# 能同步进行修改
-			if spec.period == 0:
-				var mod_attr_based: GASModifierMagnitudeAttributeBased = mod.magnitude_def as GASModifierMagnitudeAttributeBased
-				if mod_attr_based and not mod_attr_based.is_snapshot():
-					var dep_attr: StringName = mod_attr_based.attr_name
+				attr_set.apply_modifier(mod_spec.attr_name, handle, mod_spec.op, mod_spec.get_magnitude())
+		if spec.period == 0:
+			for mod_spec in spec.modifiers:
+				var attr_based := mod_spec.magnitude_def as GASModifierMagnitudeAttributeBased
+				if attr_based and not attr_based.is_snapshot():
+					var capture_def := _find_capture_def(spec.effect_def, attr_based.attr_name, attr_based.from_target)
 					var home: GASAbilitySystemComponent = self
-					if not mod_attr_based.from_target:
+					if not capture_def.from_target:
 						home = spec.source_asc
 						if home == null:
 							GameLogger.error("GameAbilitySystemComponent", "source_asc is null for dependency!")
 							continue
-					if not home._attribute_dependencies.has(dep_attr):
-						home._attribute_dependencies[dep_attr] = []
-					var dic = {
-						"asc": self,
-						"attr_name": mod.attr_name,
+					if not home._attribute_dependencies.has(capture_def.attr_name):
+						home._attribute_dependencies[capture_def.attr_name] = []
+					home._attribute_dependencies[capture_def.attr_name].append({
+						"asc":self,
+						"attr_name": mod_spec.attr_name,
 						"handle": handle,
-						"mod_spec": mod
-					}
-					home._attribute_dependencies[dep_attr].append(dic)
-			
+						"mod_spec": mod_spec
+					})
 		if not spec.effect_def.executions.is_empty():
 			if spec.period <= 0:
 				GameLogger.warn("GameAbilitySystemComponent", "execution only support \"period > 0\" type, executions ignored")
-		_active_effects.append({"handle": handle, "spec": spec, "remaining_time": spec.duration, "granted_tags":spec.effect_def.granted_tag, "period_timer": spec.period, "stack_count": 1})
+		_active_effects.append({"handle": handle, "spec": spec, "remaining_time": spec.duration, "granted_tags": spec.effect_def.granted_tag, "period_timer": spec.period, "stack_count": 1})
 		for tag in spec.effect_def.granted_tag._tags:
 			_add_owned_tag(tag)
 		return handle
@@ -341,6 +344,13 @@ func _same_ge(ge_a: GASGameplayEffect, ge_b: GASGameplayEffect) -> bool:
 	if not ge_a.resource_path.is_empty() and not ge_b.resource_path.is_empty():
 		return ge_a.resource_path == ge_b.resource_path
 	return ge_a == ge_b
+
+# 按照attr_name和from_target找捕获声明
+func _find_capture_def(effect_def: GASGameplayEffect, attr_name: StringName, from_target: bool) -> GASCaptureDefinition:
+	for capture_def in effect_def.relevant_attributes:
+		if capture_def.attr_name == attr_name and capture_def.from_target == from_target:
+			return capture_def
+	return null
 
 func _sync_stack_count(entry: Dictionary) -> void:
 	for mod in entry.spec.modifiers:
