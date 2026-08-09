@@ -50,6 +50,9 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 		_run_executions(spec)
 		for attr_set in _attribute_sets:
 			attr_set.post_gameplay_effect_execute(spec)
+		for tag in spec.effect_def.gameplay_cue_tags._tags:
+			var params := _make_cue_parameters(spec)
+			GameplayCueManager.broadcast(tag, GASEnums.GameplayCueEvent.EXECUTED, params)
 		return INVALID_HANDLE
 	elif spec.effect_def.duration_policy == GASEnums.DurationPolicy.DURATION or spec.effect_def.duration_policy == GASEnums.DurationPolicy.INFINITE:
 		if spec.effect_def.stack_policy == GASEnums.StackingPolicy.LIMITED:
@@ -108,6 +111,9 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 			if spec.period <= 0:
 				GameLogger.warn("GameAbilitySystemComponent", "execution only support \"period > 0\" type, executions ignored")
 		_active_effects.append({"handle": handle, "spec": spec, "remaining_time": spec.duration, "granted_tags": spec.effect_def.granted_tag, "period_timer": spec.period, "stack_count": 1})
+		for tag in spec.effect_def.gameplay_cue_tags._tags:
+			var params := _make_cue_parameters(spec)
+			GameplayCueManager.broadcast(tag, GASEnums.GameplayCueEvent.ON_ACTIVE, params)
 		for tag in spec.effect_def.granted_tag._tags:
 			_add_owned_tag(tag)
 		return handle
@@ -127,6 +133,9 @@ func remove_active_effect(handle: int) -> bool:
 		if entry.handle == handle:
 			_active_effects.erase(entry)
 			_cleanup_effect(entry)
+			for tag in entry.spec.effect_def.gameplay_cue_tags._tags:
+				var params := _make_cue_parameters(entry.spec)
+				GameplayCueManager.broadcast(tag, GASEnums.GameplayCueEvent.ON_REMOVED, params)
 			return true
 	return false
 
@@ -392,3 +401,10 @@ func _find_stack_entry(spec: GASEffectSpec) -> Dictionary:
 				continue
 			return entry
 	return {}
+
+func _make_cue_parameters(spec: GASEffectSpec) -> GASGameplayCueParameters:
+	var params := GASGameplayCueParameters.new()
+	params.target = spec.target_asc.avatar_actor
+	params.instigator = spec.source_asc.avatar_actor if spec.source_asc else null
+	params.magnitude = spec.modifiers[0].get_magnitude() if not spec.modifiers.is_empty() else 0
+	return params

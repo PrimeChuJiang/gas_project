@@ -1,7 +1,14 @@
-[gd_resource type="Resource" script_class="GASGameplayEffect" format=3 uid="uid://dgn000000029a"]
+[gd_resource type="Resource" script_class="GASGameplayEffect" format=3 uid="uid://dgn00000003aa"]
 
+[ext_resource type="Script" uid="uid://c6vfd5x4ybmyw" path="res://addons/gameplay_abilities_system/scripts/execution_calculation/gameplay_execution_calculation.gd" id="1_edned"]
 [ext_resource type="Script" uid="uid://bmi3sw3w3ymx8" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect.gd" id="1_eff"]
 [ext_resource type="Script" uid="uid://duyreunis5mf7" path="res://addons/gameplay_tags/scripts/structure/f_gameplay_tag_container.gd" id="1_tags"]
+[ext_resource type="Script" uid="uid://defg8fw8hdubq" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_modifier.gd" id="3_elfcx"]
+[ext_resource type="Script" uid="uid://r1bokvajql3r" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_capture_definition.gd" id="4_lb3pa"]
+
+[sub_resource type="Resource" id="Resource_cwyk4"]
+script = ExtResource("1_tags")
+_saved_tag_names = Array[StringName]([&"GameplayCue", &"GameplayCue.Status", &"GameplayCue.Status.Stun"])
 
 [sub_resource type="Resource" id="Resource_tags"]
 script = ExtResource("1_tags")
@@ -12,5 +19,6 @@ script = ExtResource("1_eff")
 duration_policy = 1
 duration = 2.0
 granted_tag = SubResource("Resource_tags")
+gameplay_cue_tags = SubResource("Resource_cwyk4")
 comment = "骷髅打击：2 秒眩晕（纯标签 GE，无属性修改，门禁阻断施法与攻击）"
 metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"

@@ -4,6 +4,11 @@ extends Node
 var _pass_count := 0
 var _fail_count := 0
 
+var _cue_active_count := 0
+var _cue_removed_count := 0
+var _cue_last_target: Node = null
+var _cue_last_magnitude := 0.0
+
 func is_pass() -> bool:
 	return _fail_count == 0
 
@@ -12,6 +17,15 @@ func get_pass_count() -> int:
 
 func get_fail_count() -> int:
 	return _fail_count
+
+func _on_cue(tag: FGameplayTag, event: GASEnums.GameplayCueEvent, params: GASGameplayCueParameters) -> void:
+	match event:
+		GASEnums.GameplayCueEvent.ON_ACTIVE:
+			_cue_active_count += 1
+			_cue_last_target = params.target
+			_cue_last_magnitude = params.magnitude
+		GASEnums.GameplayCueEvent.ON_REMOVED:
+			_cue_removed_count += 1
 
 func _check(cond: bool, label: String) -> void:
 	if cond:
@@ -172,13 +186,27 @@ func _run_basic_regression() -> void:
 	_check(is_equal_approx(dummy.get_attr(&"Body"), c2 - 16.0), "基础-23 等级曲线 level=3 外推 -16")
 
 	var stun_ge: GASGameplayEffect = load("res://addons/gameplay_abilities_system/test/game/monsters/ge_skeleton_stun.tres")
+	var stun_cue_tag: FGameplayTag = GameplayTags.request_gameplay_tag(&"GameplayCue.Status.Stun")
+	_cue_active_count = 0
+	_cue_removed_count = 0
+	_cue_last_target = null
+	_cue_last_magnitude = 0.0
+	GameplayCueManager.register(stun_cue_tag, _on_cue)
 	dummy.asc.apply_gameplay_effect_spec_to_self(dummy.asc.make_effect_spec(stun_ge))
 	_check(dummy.is_stunned(), "基础-24 纯标签 GE 授予 Stun")
+	_check(_cue_active_count == 1, "基础-24b 施加眩晕 → GameplayCue OnActive ×1")
+	_check(_cue_last_target != null, "基础-24c 小票携带 target（被打者）")
+	_check(_cue_last_magnitude == 0.0, "基础-24d 纯标签 GE 无 modifier，magnitude 为 0")
 	var dispel_query := FGameplayTagContainer.new()
 	dispel_query.add_tag(GameplayTags.request_gameplay_tag(&"State.Debuff"))
 	var removed := dummy.asc.remove_active_effects_with_tags(dispel_query)
 	_check(removed >= 1, "基础-25 按 State.Debuff 驱散移除 %d 个效果" % removed)
 	_check(not dummy.is_stunned(), "基础-26 驱散后 Stun 撤销")
+	_check(_cue_removed_count == 1, "基础-26b 驱散 → GameplayCue OnRemoved ×1")
+	dummy.asc.apply_gameplay_effect_spec_to_self(dummy.asc.make_effect_spec(stun_ge))
+	await _timer(2.5)
+	_check(_cue_removed_count == 2, "基础-26c 自然到期 → GameplayCue OnRemoved ×2")
+	GameplayCueManager.unregister(stun_cue_tag, _on_cue)
 	dummy.queue_free()
 	await _timer(0.1)
 

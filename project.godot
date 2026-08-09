@@ -22,6 +22,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 GameplayTags="*uid://cu1tica0d6ofq"
+GameplayCueManager="*uid://cguoem6rn623s"
 
 [display]
 

@@ -40,3 +40,11 @@ enum StackType{
 	AGGREGATE,
 	STACK_BY_SOURCE
 }
+
+# GE触发事件
+enum GameplayCueEvent{
+	ON_ACTIVE, # GE 开始
+	WHILE_ACTIVE, # GE 持续生效期间(每 tick)
+	EXECUTED, # 瞬发 GE 一次性生效
+	ON_REMOVED # GE 结束
+}
