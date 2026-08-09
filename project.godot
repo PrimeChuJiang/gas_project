@@ -37,7 +37,8 @@ enabled=PackedStringArray("res://addons/gameplay_abilities_system/plugin.cfg", "
 folder_colors={
 "res://addons/gameplay_abilities_system/scripts/execution_calculation/": "pink",
 "res://addons/gameplay_abilities_system/scripts/modifier_magnitude/": "blue",
-"res://addons/gameplay_abilities_system/test/": "green"
+"res://addons/gameplay_abilities_system/test/": "green",
+"res://addons/gameplay_abilities_system/test_topdown/": "green"
 }
 
 [gameplay_tags]

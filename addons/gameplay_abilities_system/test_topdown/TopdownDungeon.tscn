@@ -1,22 +1,23 @@
-[gd_scene load_steps=2 format=3 uid="uid://btd2l8ndtdn01"]
+[gd_scene format=3 uid="uid://btd2l8ndtdn01"]
 
-[ext_resource type="Script" path="res://addons/gameplay_abilities_system/test_topdown/topdown_scene.gd" id="1_scene"]
+[ext_resource type="Script" uid="uid://dn0beux4fg035" path="res://addons/gameplay_abilities_system/test_topdown/topdown_scene.gd" id="1_scene"]
 
-[node name="TopdownDungeon" type="Node2D"]
+[node name="TopdownDungeon" type="Node2D" unique_id=468174594]
 script = ExtResource("1_scene")
 
-[node name="World" type="Node2D" parent="."]
+[node name="World" type="Node2D" parent="." unique_id=894113214]
 
-[node name="CanvasModulate" type="CanvasModulate" parent="."]
+[node name="CanvasModulate" type="CanvasModulate" parent="." unique_id=892099005]
 color = Color(0.62, 0.66, 0.72, 1)
 
-[node name="Camera2D" type="Camera2D" parent="."]
+[node name="Camera2D" type="Camera2D" parent="." unique_id=199283174]
+position = Vector2(576, 328)
 position_smoothing_enabled = true
 position_smoothing_speed = 8.0
 
-[node name="CanvasLayer" type="CanvasLayer" parent="."]
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1302593843]
 
-[node name="Root" type="Control" parent="CanvasLayer"]
+[node name="Root" type="Control" parent="CanvasLayer" unique_id=395802296]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0

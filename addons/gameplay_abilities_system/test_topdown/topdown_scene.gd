@@ -80,10 +80,9 @@ var gear_buttons: Dictionary = {}
 var _log_lines: Array[String] = []
 
 func _ready() -> void:
-	camera.limit_left = 0
-	camera.limit_top = 0
-	camera.limit_right = WORLD_W * 32 * WORLD_SCALE
-	camera.limit_bottom = WORLD_H * 32 * WORLD_SCALE
+	# 相机：地图全览 + 居中 + 随窗口自适应（zoom 上限适配，下限保护避免角色过小）
+	_apply_camera_fit()
+	get_window().size_changed.connect(_apply_camera_fit)
 	_vfx_layer = Node2D.new()
 	_vfx_layer.z_index = 60
 	add_child(_vfx_layer)
@@ -100,6 +99,13 @@ func _ready() -> void:
 		_run_regression()
 	elif "--ui-check" in OS.get_cmdline_user_args():
 		_run_ui_check()
+
+func _apply_camera_fit() -> void:
+	var win_size: Vector2 = get_window().size
+	var map_size := Vector2(WORLD_W * 32.0 * WORLD_SCALE, WORLD_H * 32.0 * WORLD_SCALE)
+	var fit := minf(win_size.x / map_size.x, win_size.y / map_size.y)
+	camera.zoom = Vector2.ONE * maxf(fit, 0.5)
+	camera.position = map_size * 0.5
 
 ## ---------------- 程序化音效（无外部素材，纯合成） ----------------
 
