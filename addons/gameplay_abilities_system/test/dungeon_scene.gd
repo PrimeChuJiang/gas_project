@@ -42,6 +42,10 @@ const STATUS_ICONS := {
 	&"State.Buff.Shield": {"icon": "shield", "label": "护盾"},
 }
 
+const CUE_STUN_TAG := &"GameplayCue.Status.Stun"
+const CUE_HIT_TAG := &"GameplayCue.Damage.Hit"
+const STUN_CUE_SCRIPT := preload("res://addons/gameplay_abilities_system/test/cues/stun_cue.gd")
+
 const TILE_ICONS := {
 	"TRAP": "spiked-wall", "TREASURE": "open-chest", "EXIT": "dungeon-gate",
 }
@@ -68,6 +72,8 @@ var _overlay: VBoxContainer = null
 var _overlay_title: Label = null
 var _ui_timer: float = 0.0
 var _log_lines: Array[String] = []
+# GameplayCue 消费者：实体 → 其上的眩晕凭票根数组（表现层只管表现，逻辑层零感知）
+var _stun_tickets: Dictionary = {}
 
 @onready var phase_label: Label = $CanvasLayer/Root/MainVBox/TopBar/PhaseBadge/PhaseLabel
 @onready var turn_info_label: Label = $CanvasLayer/Root/MainVBox/TopBar/TurnInfoLabel
@@ -93,6 +99,7 @@ func _ready() -> void:
 	_build_hand()
 	_build_gear_row()
 	_build_status_icons()
+	_register_cue_consumers()
 	_new_game()
 	if "--run-tests" in OS.get_cmdline_user_args():
 		await _run_regression()
@@ -134,6 +141,7 @@ func _ready() -> void:
 
 func _new_game() -> void:
 	_clear_selection()
+	_clear_cue_markers()
 	_hide_overlay()
 	for btn in _monster_buttons.values():
 		btn.queue_free()
@@ -166,6 +174,57 @@ func _connect_game() -> void:
 func _on_ability_result(label: String, success: bool) -> void:
 	if not success:
 		_push_log("【%s】被拒绝（冷却/法力不足/眩晕/行动次数）" % label)
+
+# —— GameplayCue 消费者（表现层）：只消费事件做表现，逻辑层零感知 ——
+
+func _register_cue_consumers() -> void:
+	var stun_tag: FGameplayTag = GameplayTags.request_gameplay_tag(CUE_STUN_TAG)
+	var hit_tag: FGameplayTag = GameplayTags.request_gameplay_tag(CUE_HIT_TAG)
+	GameplayCueManager.register_factory(stun_tag, _cue_factory_stun)
+	GameplayCueManager.register(stun_tag, _on_cue_event)
+	GameplayCueManager.register(hit_tag, _on_cue_event)
+
+func _cue_factory_stun(_params: GASGameplayCueParameters) -> Node:
+	return STUN_CUE_SCRIPT.new()
+
+func _on_cue_event(tag: FGameplayTag, event: GASEnums.GameplayCueEvent, params: GASGameplayCueParameters) -> void:
+	var entity := params.target as DungeonEntity
+	if entity == null or entity.board_index < 0 or entity.board_index >= _tile_buttons.size():
+		return
+	match event:
+		GASEnums.GameplayCueEvent.ON_ACTIVE:
+			var handle := GameplayCueManager.add_cue(tag, _tile_buttons[entity.board_index], params)
+			if not _stun_tickets.has(entity):
+				_stun_tickets[entity] = []
+			_stun_tickets[entity].append(handle)
+		GASEnums.GameplayCueEvent.ON_REMOVED:
+			if _stun_tickets.has(entity):
+				for handle in _stun_tickets[entity]:
+					GameplayCueManager.remove_cue(handle)
+				_stun_tickets.erase(entity)
+		GASEnums.GameplayCueEvent.EXECUTED:
+			_spawn_damage_text(entity, params.magnitude)
+
+func _clear_cue_markers() -> void:
+	for entity in _stun_tickets:
+		for handle in _stun_tickets[entity]:
+			GameplayCueManager.remove_cue(handle)
+	_stun_tickets.clear()
+
+func _spawn_damage_text(entity: DungeonEntity, magnitude: float) -> void:
+	var label := Label.new()
+	var has_value := not is_zero_approx(magnitude)
+	label.text = str(int(magnitude)) if has_value else "受击"
+	label.add_theme_font_size_override("font_size", 14)
+	label.add_theme_color_override("font_color", Color(1, 0.35, 0.3) if has_value else Color(1, 0.65, 0.35))
+	label.set_position(Vector2(14, 4))
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tile_buttons[entity.board_index].add_child(label)
+	var tw := label.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(label, "position:y", 4.0 - 26.0, 0.7)
+	tw.tween_property(label, "modulate:a", 0.0, 0.7)
+	tw.chain().tween_callback(label.queue_free)
 
 func _load_icon(name: String) -> Texture2D:
 	return load(ICON_DIR + name + ".svg")
@@ -685,4 +744,5 @@ func _run_regression() -> void:
 	add_child(test_runner)
 	await test_runner.run_all()
 	_push_log("=== 回归结束：%s（通过 %d / 失败 %d）===" % ["ALL PASS" if test_runner.is_pass() else "HAS FAILURE", test_runner.get_pass_count(), test_runner.get_fail_count()])
+	_clear_cue_markers()
 	_refresh_all()

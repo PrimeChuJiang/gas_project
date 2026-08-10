@@ -3,6 +3,11 @@
 [ext_resource type="Script" uid="uid://bmi3sw3w3ymx8" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect.gd" id="1_eff"]
 [ext_resource type="Script" uid="uid://defg8fw8hdubq" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_modifier.gd" id="1_mod"]
 [ext_resource type="Script" uid="uid://es6sw1eho3fp" path="res://addons/gameplay_abilities_system/scripts/modifier_magnitude/modifier_magnitude_set_by_caller.gd" id="1_mag"]
+[ext_resource type="Script" uid="uid://duyreunis5mf7" path="res://addons/gameplay_tags/scripts/structure/f_gameplay_tag_container.gd" id="1_tags"]
+
+[sub_resource type="Resource" id="Resource_cue"]
+script = ExtResource("1_tags")
+_saved_tag_names = Array[StringName]([&"GameplayCue", &"GameplayCue.Damage", &"GameplayCue.Damage.Hit"])
 
 [sub_resource type="Resource" id="Resource_mag"]
 script = ExtResource("1_mag")
@@ -20,5 +25,6 @@ metadata/_custom_type_script = "uid://defg8fw8hdubq"
 script = ExtResource("1_eff")
 duration_policy = 0
 modifiers = Array[ExtResource("1_mod")]([SubResource("Resource_mod")])
+gameplay_cue_tags = SubResource("Resource_cue")
 comment = "陷阱伤害：数值由棋盘随机 SetByCaller(damage) 注入"
 metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"

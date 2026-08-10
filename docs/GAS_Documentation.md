@@ -536,14 +536,18 @@ Gameplay Cues 是 GAS 提供的视觉效果和音频系统，与游戏逻辑分�
 | `Static`       | 一次性效果（无生命周期）                | 子弹命中火花特效 |
 | `Actor`        | 持续效果（随 GE/能力生命周期存在/销毁） | 眩晕的旋转星星   |
 
-### 9.3 触发方式
+### 9.3 触发方式（✅ 已实现）
 
 ```gdscript
 # GE 自动触发：在 GE 配置中指定 GameplayCue Tags
+#   INSTANT GE 应用 → EXECUTED（一次性）
+#   DURATION/INFINITE GE 挂账 → ON_ACTIVE，移除 → ON_REMOVED
+#   周期 GE 每跳 → EXECUTED（对齐 UE：周期执行 = 一次 Execute）
+# WHILE_ACTIVE 有意不做：持续表现由凭票节点自身 _process 承担（枚举保留对齐 UE）
 # 手动触发：
-asc.execute_gameplay_cue(tag, params)    # Static
-asc.add_gameplay_cue(tag, params)        # Actor (持续)
-asc.remove_gameplay_cue(tag)             # 移除 Actor Cue
+asc.execute_gameplay_cue(tag, params)     # Static：广播 EXECUTED 给 handler
+asc.add_gameplay_cue(tag, params)         # Actor (持续)：凭票制，返回 handle（target 取自 params.target）
+asc.remove_gameplay_cue(handle)           # 凭票移除 Actor Cue（无效票返回 false）
 ```
 
 ### 9.4 Tag 命名规范
@@ -752,7 +756,7 @@ addons/gameplay_abilities_system/
 | 7 | GASAbilityTask | ✅ 完成 | 基类 + Delay；WaitInput / WaitAnimNotify / WaitTargetData 排队中 |
 | 8 | 执行器 / MMC | ✅ 完成 | magnitude 四类（ScalableFloat / AttributeBased / SetByCaller / SetByCaller×Attr）+ ExecutionCalculation + 双桶落账 |
 | 9 | 依赖登记簿 | ✅ 完成 | 非快照属性依赖实时重算（簿挂被读属性的家，跨墙免拉线，环保护） |
-| 10 | GameplayCue | ⏳ 未开始 | `gameplay_cue_tags` 字段已预留，无人消费（路线图第一梯队） |
+| 10 | GameplayCue | ✅ 完成 | 第 21 节：事件流（邮局广播 + 小票 + ASC 三时刻钩子）、凭票制 Actor Cue（工厂 + add/remove + 存在性计数）、周期 GE 每跳 EXECUTED、手动 API 全部落地；WHILE_ACTIVE 有意不做（持续表现由凭票节点自身 _process 承担）；桌游演示：眩晕星星（凭票工厂）+ 伤害飘字（GE 自动 / 手动 API 双链） |
 | 11 | TargetData | ⏳ 未开始 | 测试中目标仍是写死的引用 |
 | 12 | 网络同步 / 预测 | ❌ 明确不做 | 单机项目，Godot 网络模型与 UE 差异过大 |
 

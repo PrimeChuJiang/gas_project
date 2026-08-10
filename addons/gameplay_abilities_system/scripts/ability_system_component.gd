@@ -197,6 +197,15 @@ func get_stack_count(handle: int) -> int:
 			return entry.stack_count
 	return 0
 
+func execute_gameplay_cue(tag: FGameplayTag, params: GASGameplayCueParameters):
+	GameplayCueManager.broadcast(tag, GASEnums.GameplayCueEvent.EXECUTED, params)
+
+func add_gameplay_cue(tag: FGameplayTag, params: GASGameplayCueParameters) -> int:
+	return GameplayCueManager.add_cue(tag, params.target, params)
+
+func remove_gameplay_cue(handle: int) -> bool:
+	return GameplayCueManager.remove_cue(handle)
+
 func _ready():
 	set_process(true)
 
@@ -274,6 +283,9 @@ func _apply_periodic_effect(entry: Dictionary) -> void:
 	_run_executions(spec)
 	for attr_set in _attribute_sets:
 		attr_set.post_gameplay_effect_execute(spec)
+	for tag in spec.effect_def.gameplay_cue_tags._tags:
+		var params := _make_cue_parameters(spec)
+		GameplayCueManager.broadcast(tag, GASEnums.GameplayCueEvent.EXECUTED, params)
 
 func _on_ability_ended(ability: GASGameplayAbility, was_cancelled: bool):
 	var idx = _active_abilities.find(ability)

@@ -55,6 +55,12 @@ func register_factory(tag: FGameplayTag, factory: Callable) -> void:
 	else:
 		GameLogger.warn("GameplayCueManager", "factory already registered for tag")
 
+func unregister_factory(tag: FGameplayTag) -> void:
+	if not _cue_factories.has(tag):
+		GameLogger.error("GameplayCueManager", "factory is not registered for tag")
+		return
+	_cue_factories.erase(tag)
+
 func add_cue(tag: FGameplayTag, target: Node, params: GASGameplayCueParameters) -> int:
 	var key: Array = [tag, target]
 	var cue: ActiveCue = _active_cues.get(key)
@@ -77,3 +83,17 @@ func add_cue(tag: FGameplayTag, target: Node, params: GASGameplayCueParameters) 
 	_cue_instances[handle] = cue
 	
 	return handle
+
+## 凭票退票：count 减一，票根清零（count == 0）时销毁表现节点并清账本
+func remove_cue(handle: int) -> bool:
+	if not _cue_instances.has(handle):
+		GameLogger.error("GameplayCueManager", "cue handle %d is not existed" % handle)
+		return false
+	var cue: ActiveCue = _cue_instances[handle]
+	_cue_instances.erase(handle)
+	cue.count -= 1
+	if cue.count <= 0:
+		if cue.node and is_instance_valid(cue.node):
+			cue.node.queue_free()
+		_active_cues.erase([cue.tag, cue.target])
+	return true

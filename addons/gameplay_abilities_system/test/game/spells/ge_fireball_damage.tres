@@ -5,6 +5,11 @@
 [ext_resource type="Script" uid="uid://defg8fw8hdubq" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_modifier.gd" id="1_mod"]
 [ext_resource type="Script" uid="uid://c6vfd5x4ybmyw" path="res://addons/gameplay_abilities_system/scripts/execution_calculation/gameplay_execution_calculation.gd" id="1_wknp2"]
 [ext_resource type="Script" uid="uid://r1bokvajql3r" path="res://addons/gameplay_abilities_system/scripts/gameplay_effect_capture_definition.gd" id="4_m2ij0"]
+[ext_resource type="Script" uid="uid://duyreunis5mf7" path="res://addons/gameplay_tags/scripts/structure/f_gameplay_tag_container.gd" id="1_tags"]
+
+[sub_resource type="Resource" id="Resource_cue"]
+script = ExtResource("1_tags")
+_saved_tag_names = Array[StringName]([&"GameplayCue", &"GameplayCue.Damage", &"GameplayCue.Damage.Hit"])
 
 [sub_resource type="Resource" id="Resource_mag"]
 script = ExtResource("1_mag")
@@ -20,5 +25,6 @@ metadata/_custom_type_script = "uid://defg8fw8hdubq"
 [resource]
 script = ExtResource("1_eff")
 modifiers = Array[ExtResource("1_mod")]([SubResource("Resource_mod")])
+gameplay_cue_tags = SubResource("Resource_cue")
 comment = "火球伤害：数值由调用方 SetByCaller(damage) 决定（GA 按 Level 计算）"
 metadata/_custom_type_script = "uid://bmi3sw3w3ymx8"

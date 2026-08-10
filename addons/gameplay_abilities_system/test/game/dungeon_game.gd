@@ -37,11 +37,13 @@ var _spell_damage_ges: Dictionary = {}
 var _spell_cost_ges: Dictionary = {}
 var _spell_cooldown_ges: Dictionary = {}
 var _stun_tag: FGameplayTag
+var _hit_cue_tag: FGameplayTag
 
 var _game_started: bool = false
 
 func _ready() -> void:
 	_stun_tag = GameplayTags.request_gameplay_tag(TAG_STUN)
+	_hit_cue_tag = GameplayTags.request_gameplay_tag(&"GameplayCue.Damage.Hit")
 
 func setup_default_game() -> void:
 	var hero_attrs: Dictionary[StringName, float] = {
@@ -247,6 +249,11 @@ func hero_attack(target: DungeonEntity) -> bool:
 	var success := hero.try_melee_attack(target)
 	if success:
 		action_used = true
+		# 手动 API 演示：无 GE 的逻辑事件也能发 cue（近战命中由 Execution 结算，不走 modifier GE）
+		var cue_params := GASGameplayCueParameters.new()
+		cue_params.target = target
+		cue_params.instigator = hero
+		hero.asc.execute_gameplay_cue(_hit_cue_tag, cue_params)
 	return success
 
 func hero_cast(spell: GASGameplayAbility, target: DungeonEntity = null) -> bool:

@@ -5,9 +5,19 @@ var _pass_count := 0
 var _fail_count := 0
 
 var _cue_active_count := 0
+var _cue_executed_count := 0
 var _cue_removed_count := 0
 var _cue_last_target: Node = null
 var _cue_last_magnitude := 0.0
+
+var _cue_factory_spawns := 0
+var _cue_factory_node: Node = null
+
+func _on_cue_factory(_params: GASGameplayCueParameters) -> Node:
+	_cue_factory_spawns += 1
+	_cue_factory_node = Node.new()
+	_cue_factory_node.name = "StunCueNode"
+	return _cue_factory_node
 
 func is_pass() -> bool:
 	return _fail_count == 0
@@ -24,6 +34,8 @@ func _on_cue(tag: FGameplayTag, event: GASEnums.GameplayCueEvent, params: GASGam
 			_cue_active_count += 1
 			_cue_last_target = params.target
 			_cue_last_magnitude = params.magnitude
+		GASEnums.GameplayCueEvent.EXECUTED:
+			_cue_executed_count += 1
 		GASEnums.GameplayCueEvent.ON_REMOVED:
 			_cue_removed_count += 1
 
@@ -207,7 +219,88 @@ func _run_basic_regression() -> void:
 	await _timer(2.5)
 	_check(_cue_removed_count == 2, "基础-26c 自然到期 → GameplayCue OnRemoved ×2")
 	GameplayCueManager.unregister(stun_cue_tag, _on_cue)
+
+	var ticket_tag: FGameplayTag = GameplayTags.request_gameplay_tag(&"GameplayCue.Test.Ticket")
+	_cue_factory_spawns = 0
+	_cue_factory_node = null
+	GameplayCueManager.register_factory(ticket_tag, _on_cue_factory)
+	var cue_target_a := Node.new()
+	cue_target_a.name = "CueTargetA"
+	add_child(cue_target_a)
+	var cue_handle_a1 := GameplayCueManager.add_cue(ticket_tag, cue_target_a, GASGameplayCueParameters.new())
+	_check(_cue_factory_spawns == 1, "基础-27 首张票 0→1 触发工厂")
+	_check(_cue_factory_node != null and _cue_factory_node.get_parent() == cue_target_a, "基础-28 表现节点挂到目标身上")
+	var cue_handle_a2 := GameplayCueManager.add_cue(ticket_tag, cue_target_a, GASGameplayCueParameters.new())
+	_check(_cue_factory_spawns == 1, "基础-29 同目标第二张票复用表现（不再调工厂）")
+	_check(cue_handle_a1 != cue_handle_a2, "基础-30 两张票 handle 不同")
+	_check(GameplayCueManager.remove_cue(cue_handle_a1), "基础-31 凭票退一（count 2→1）")
+	_check(is_instance_valid(_cue_factory_node), "基础-32 还剩一张票，表现节点存活")
+	_check(GameplayCueManager.remove_cue(cue_handle_a2), "基础-33 凭票退一（count 1→0）")
+	await _timer(0.1)
+	_check(not is_instance_valid(_cue_factory_node), "基础-34 票根清零 → 表现节点销毁")
+	_check(not GameplayCueManager.remove_cue(cue_handle_a1), "基础-35 旧票无害化：二次退票 false")
+	var cue_target_b := Node.new()
+	cue_target_b.name = "CueTargetB"
+	add_child(cue_target_b)
+	var cue_handle_b := GameplayCueManager.add_cue(ticket_tag, cue_target_b, GASGameplayCueParameters.new())
+	_check(_cue_factory_spawns == 2, "基础-36 不同目标各自 0→1（新建独立表现）")
+	GameplayCueManager.remove_cue(cue_handle_b)
+	GameplayCueManager.unregister_factory(ticket_tag)
+	GameplayCueManager.register_factory(ticket_tag, func(_params: GASGameplayCueParameters) -> Node: return null)
+	var empty_handle := GameplayCueManager.add_cue(ticket_tag, cue_target_b, GASGameplayCueParameters.new())
+	_check(empty_handle > 0, "基础-37 工厂返回空表现也合法（凭票照发）")
+	_check(GameplayCueManager.remove_cue(empty_handle), "基础-38 空表现退票正常")
+	GameplayCueManager.unregister_factory(ticket_tag)
+	cue_target_a.queue_free()
+	cue_target_b.queue_free()
 	dummy.queue_free()
+	await _timer(0.1)
+
+	var dot2 := _make_dummy("木桩2", {&"Body": 50.0, &"MaxBody": 100.0, &"Mind": 50.0, &"MaxMind": 50.0,
+		&"Attack": 20.0, &"Defense": 5.0, &"Move": 2.0, &"Level": 3.0, &"CooldownReduction": 0.0})
+
+	# 周期 GE 三事件：ON_ACTIVE ×1 → EXECUTED ×N（每跳）→ ON_REMOVED ×1
+	var dot_cue_ge := GASGameplayEffect.new()
+	dot_cue_ge.duration_policy = GASEnums.DurationPolicy.DURATION
+	dot_cue_ge.duration = 2.5
+	dot_cue_ge.period = 1.0
+	dot_cue_ge.gameplay_cue_tags.add_tag(stun_cue_tag)
+	_cue_active_count = 0
+	_cue_executed_count = 0
+	_cue_removed_count = 0
+	GameplayCueManager.register(stun_cue_tag, _on_cue)
+	dot2.asc.apply_gameplay_effect_spec_to_self(dot2.asc.make_effect_spec(dot_cue_ge))
+	_check(_cue_active_count == 1, "基础-39 周期 GE 挂账 → OnActive ×1")
+	await _timer(2.2)
+	_check(_cue_executed_count == 2, "基础-40 周期 GE 两跳 → Executed ×2（每跳一次）")
+	await _timer(1.5)
+	_check(_cue_removed_count == 1, "基础-41 周期 GE 到期 → OnRemoved ×1")
+	_check(_cue_executed_count == 2, "基础-42 到期后不再跳（Executed 仍为 2）")
+
+	# ASC 手动触发 API（文档 9.3）：execute 广播 / add+remove 凭票
+	_cue_executed_count = 0
+	GameplayCueManager.register(ticket_tag, _on_cue)
+	var exec_params := GASGameplayCueParameters.new()
+	exec_params.target = dot2
+	dot2.asc.execute_gameplay_cue(ticket_tag, exec_params)
+	_check(_cue_executed_count == 1, "基础-43 手动 ExecuteGameplayCue → Executed ×1")
+	_cue_factory_spawns = 0
+	_cue_factory_node = null
+	GameplayCueManager.register_factory(ticket_tag, _on_cue_factory)
+	var add_params := GASGameplayCueParameters.new()
+	add_params.target = dot2
+	var cue_handle_c := dot2.asc.add_gameplay_cue(ticket_tag, add_params)
+	_check(_cue_factory_spawns == 1, "基础-44 ASC add_gameplay_cue → 工厂 0→1")
+	_check(cue_handle_c > 0, "基础-45 add_gameplay_cue 返回有效 handle")
+	_check(_cue_factory_node != null and _cue_factory_node.get_parent() == dot2, "基础-46 表现节点挂到小票 target")
+	_check(dot2.asc.remove_gameplay_cue(cue_handle_c), "基础-47 ASC remove_gameplay_cue 凭票退")
+	await _timer(0.1)
+	_check(not is_instance_valid(_cue_factory_node), "基础-48 退票清零 → 节点销毁")
+	_check(not dot2.asc.remove_gameplay_cue(cue_handle_c), "基础-49 无效票 → false")
+	GameplayCueManager.unregister_factory(ticket_tag)
+	GameplayCueManager.unregister(ticket_tag, _on_cue)
+	GameplayCueManager.unregister(stun_cue_tag, _on_cue)
+	dot2.queue_free()
 	await _timer(0.1)
 
 func _run_gameplay_regression() -> void:
