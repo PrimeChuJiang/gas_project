@@ -1,4 +1,4 @@
-﻿class_name GASAbilityTargetData
+class_name GASAbilityTargetData
 extends RefCounted
 
 ## 目标 Actors 集合
@@ -35,3 +35,12 @@ func get_actors() -> Array[Node]:
 
 func get_location() -> Vector3:
 	return location
+
+func is_same_as(other: GASAbilityTargetData) -> bool:
+	if other == null:
+		return false
+	if has_location != other.has_location:
+		return false
+	if has_location and location != other.location:
+		return false
+	return actors == other.actors

@@ -13,6 +13,11 @@ var _cue_last_magnitude := 0.0
 var _cue_factory_spawns := 0
 var _cue_factory_node: Node = null
 
+var _ta_signal_count := 0
+
+func _on_ta_selection_changed(_old_data: GASAbilityTargetData, _new_data: GASAbilityTargetData) -> void:
+	_ta_signal_count += 1
+
 func _on_cue_factory(_params: GASGameplayCueParameters) -> Node:
 	_cue_factory_spawns += 1
 	_cue_factory_node = Node.new()
@@ -301,6 +306,161 @@ func _run_basic_regression() -> void:
 	GameplayCueManager.unregister(ticket_tag, _on_cue)
 	GameplayCueManager.unregister(stun_cue_tag, _on_cue)
 	dot2.queue_free()
+	await _timer(0.1)
+
+	var td_a := Node.new()
+	var td_b := Node.new()
+	var td_c := Node.new()
+
+	var td_single := GASAbilityTargetData.from_actor(td_a)
+	_check(td_single.get_actor() == td_a, "基础-50 from_actor 单目标返回同一实例")
+	_check(td_single.get_actors().size() == 1, "基础-51 from_actor 容器大小为 1")
+	_check(not td_single.has_location, "基础-52 纯 actor 目标无位置")
+
+	var td_src: Array[Node] = [td_a, td_b]
+	var td_multi := GASAbilityTargetData.from_actors(td_src)
+	_check(td_multi.get_actors().size() == 2, "基础-53 from_actors 多目标大小为 2")
+	_check(td_multi.get_actors()[0] == td_a and td_multi.get_actors()[1] == td_b, "基础-54 多目标元素为同一实例")
+	td_src.append(td_c)
+	_check(td_multi.get_actors().size() == 2, "基础-55 快照隔离：原数组 append 不影响 target_data")
+
+	var td_empty := GASAbilityTargetData.new()
+	_check(td_empty.get_actor() == null, "基础-56 空容器 get_actor 返回 null（fail-open 契约）")
+	_check(td_empty.get_actors().is_empty(), "基础-57 空容器 get_actors 为空")
+	_check(td_empty.get_location() == Vector3.ZERO, "基础-58 空容器 get_location 兜底 ZERO")
+	_check(not td_empty.has_location, "基础-59 空容器无位置")
+
+	var td_pos := Vector3(5.0, -2.0, 7.0)
+	var td_loc := GASAbilityTargetData.from_location(td_pos)
+	_check(td_loc.get_location() == td_pos, "基础-60 from_location 位置快照一致")
+	_check(td_loc.has_location, "基础-61 from_location has_location 为 true")
+	_check(td_loc.get_actor() == null, "基础-62 纯位置目标无 actor")
+
+	td_a.free()
+	td_b.free()
+	td_c.free()
+
+	var ta := GASAbilityTargetActor2D.new()
+	ta.name = "TestTargetActor2D"
+	add_child(ta)
+	await get_tree().physics_frame
+
+	var ta_body := StaticBody2D.new()
+	ta_body.name = "BodyA"
+	ta_body.position = Vector2(100.0, 100.0)
+	var ta_shape := CollisionShape2D.new()
+	var ta_circle := CircleShape2D.new()
+	ta_circle.radius = 10.0
+	ta_shape.shape = ta_circle
+	ta_body.add_child(ta_shape)
+	add_child(ta_body)
+	var ta_entity := Node2D.new()
+	ta_entity.name = "实体A"
+	ta_entity.position = ta_body.position
+	add_child(ta_entity)
+	ta_body.set_meta(GASAbilityTargetActor.ENTITY_META, ta_entity)
+	await get_tree().physics_frame
+
+	ta.selection_changed.connect(_on_ta_selection_changed)
+
+	_check(ta.select_at(Vector2(100.0, 100.0)), "基础-63 点选命中实体A")
+	var ta_confirm := ta.confirm_target()
+	_check(ta_confirm != null and ta_confirm.get_actor() == ta_entity, "基础-64 confirm 返回实体A")
+	_check(ta_confirm.has_location and ta_confirm.location == Vector3(100.0, 100.0, 0.0), "基础-65 命中数据带实体位置")
+	_check(_ta_signal_count == 1, "基础-66 首次选择信号 ×1")
+	_check(ta.select_at(Vector2(100.0, 100.0)), "基础-67 重复点选同一实体")
+	_check(_ta_signal_count == 1, "基础-68 跳变沿：选中未变不再发信号")
+	_check(not ta.select_at(Vector2(400.0, 400.0)), "基础-69 点选空地返回 false")
+	_check(ta.confirm_target() == null, "基础-70 空选择 confirm 为 null")
+	_check(_ta_signal_count == 2, "基础-71 有→无 跳变信号 ×1")
+	var ta_confirm2 := ta.confirm_target()
+	_check(ta_confirm2 == null, "基础-72 空选择下 confirm 仍为 null")
+	_check(ta.select_at(Vector2(100.0, 100.0)), "基础-73 重新点选实体A")
+	var ta_copy := ta.confirm_target()
+	ta_copy.actors.append(Node.new())
+	_check(ta.confirm_target().get_actors().size() == 1, "基础-74 买定离手：改拷贝不影响缓存")
+	ta.cancel_target()
+	_check(ta.confirm_target() == null, "基础-75 cancel 后 confirm 为 null")
+	_check(_ta_signal_count == 4, "基础-76 重新点选+取消 各发一次信号")
+
+	ta.filter = func(node: Node) -> bool:
+		return node.name == "实体A"
+	_check(ta.select_at(Vector2(100.0, 100.0)), "基础-77 过滤器放行实体A")
+	_check(not ta.select_at(Vector2(150.0, 100.0)), "基础-78 点选空地返回 false")
+	var ta_body_b := StaticBody2D.new()
+	ta_body_b.name = "BodyB"
+	ta_body_b.position = Vector2(300.0, 100.0)
+	var ta_shape_b := CollisionShape2D.new()
+	var ta_circle_b := CircleShape2D.new()
+	ta_circle_b.radius = 10.0
+	ta_shape_b.shape = ta_circle_b
+	ta_body_b.add_child(ta_shape_b)
+	add_child(ta_body_b)
+	var ta_entity_b := Node2D.new()
+	ta_entity_b.name = "实体B"
+	ta_entity_b.position = ta_body_b.position
+	add_child(ta_entity_b)
+	ta_body_b.set_meta(GASAbilityTargetActor.ENTITY_META, ta_entity_b)
+	await get_tree().physics_frame
+	_check(not ta.select_at(Vector2(300.0, 100.0)), "基础-79 过滤器拒收实体B")
+	_check(ta.confirm_target() == null, "基础-80 拒收后为空选择")
+	ta.filter = Callable()
+
+	var ta_body_c := StaticBody2D.new()
+	ta_body_c.name = "BodyC"
+	ta_body_c.position = Vector2(500.0, 100.0)
+	var ta_shape_c := CollisionShape2D.new()
+	var ta_circle_c := CircleShape2D.new()
+	ta_circle_c.radius = 10.0
+	ta_shape_c.shape = ta_circle_c
+	ta_body_c.add_child(ta_shape_c)
+	add_child(ta_body_c)
+	var ta_entity_c := Node2D.new()
+	ta_entity_c.name = "实体C"
+	ta_entity_c.position = ta_body_c.position
+	add_child(ta_entity_c)
+	ta_body_c.set_meta(GASAbilityTargetActor.ENTITY_META, ta_entity_c)
+	var ta_body_d := StaticBody2D.new()
+	ta_body_d.name = "BodyD"
+	ta_body_d.position = Vector2(520.0, 100.0)
+	var ta_shape_d := CollisionShape2D.new()
+	var ta_circle_d := CircleShape2D.new()
+	ta_circle_d.radius = 10.0
+	ta_shape_d.shape = ta_circle_d
+	ta_body_d.add_child(ta_shape_d)
+	add_child(ta_body_d)
+	var ta_entity_d := Node2D.new()
+	ta_entity_d.name = "实体D"
+	ta_entity_d.position = ta_body_d.position
+	add_child(ta_entity_d)
+	ta_body_d.set_meta(GASAbilityTargetActor.ENTITY_META, ta_entity_d)
+	await get_tree().physics_frame
+
+	_check(ta.select_area(Vector2(510.0, 100.0), 30.0), "基础-81 范围选择命中两个实体")
+	var ta_area_confirm := ta.confirm_target()
+	_check(ta_area_confirm != null and ta_area_confirm.get_actors().size() == 2, "基础-82 范围结果包含 2 个目标")
+	_check(ta_area_confirm.get_actors().has(ta_entity_c) and ta_area_confirm.get_actors().has(ta_entity_d), "基础-83 范围目标 C 和 D 均在")
+	_check(not ta.select_area(Vector2(900.0, 900.0), 30.0), "基础-84 范围在空地处返回 false")
+	_check(ta.confirm_target() == null, "基础-85 范围空选择 confirm 为 null")
+	ta.filter = func(node: Node) -> bool:
+		return node.name == "实体C"
+	_check(ta.select_area(Vector2(510.0, 100.0), 30.0), "基础-86 范围选择带过滤器仍命中")
+	_check(ta.confirm_target().get_actors().size() == 1 and ta.confirm_target().get_actors()[0] == ta_entity_c, "基础-87 过滤器在范围内拒收 D 只留 C")
+	ta.filter = Callable()
+	_check(ta.select_at(Vector2(100.0, 100.0)), "基础-88 点选→范围 切换回点选")
+	_check(_ta_signal_count == 10, "基础-89 选择切换均有跳变信号")
+	ta_area_confirm.actors.append(Node.new())
+	_check(ta.confirm_target().get_actors().size() == 1, "基础-90 范围 confirm 拷贝隔离")
+
+	ta.queue_free()
+	ta_body.queue_free()
+	ta_body_b.queue_free()
+	ta_body_c.queue_free()
+	ta_body_d.queue_free()
+	ta_entity.queue_free()
+	ta_entity_b.queue_free()
+	ta_entity_c.queue_free()
+	ta_entity_d.queue_free()
 	await _timer(0.1)
 
 func _run_gameplay_regression() -> void:

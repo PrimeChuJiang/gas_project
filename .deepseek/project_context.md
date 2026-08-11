@@ -107,6 +107,22 @@ Godot 4.7（Forward Plus）下用 GDScript 复刻 UE GameplayAbilitySystem 单�
   照旧（tag 祖先计数 O(1)、首跳立即开关、spec 级改写已核查、SetByCaller
   key 换 tag 已判定画蛇添足）
 
+## 当前进度（2026-08-11 晚，会话 5）
+
+- **TargetActor 课（第 22 节需求 1 延伸）全关账**：基类 GASAbilityTargetActor
+  （Node，缓存/信号/confirm 买定离手/cancel/跳变沿全量比较）+ GASAbilityTargetData
+  .is_same_as 四步独立判定 + 2D 子类（select_at 点选 / select_area 范围多选 /
+  _resolve_entity 过滤链）+ filter Callable 注入（逻辑层过滤，fail-open）；
+  测试基础-63~90 全绿，**回归 171/0**（ExitCode=0）
+- **需求 2 未开始**：WaitTargetData Task（把"等玩家选目标"包成 Task，task_finished
+  出 TargetData，GA 起手挂 task）——下次课
+- **新账（GDScript 坑）**：lambda 值捕获实锤——回调改外部局部变量无效，必须
+  成员变量 + 命名函数（或容器）；已记 sessions/2026-08-11
+- **想法清单**：重叠命中 z 排序、AOE 圈视觉预览、collide_with_areas 开关
+  （当前测试用 StaticBody2D 规避）
+- 环境备忘：同会话 4（Godot 4.7.1 路径、--import 缓存、TestScene --run-tests、
+  Start-Process 重定向、输出文件 GBK 需 -Encoding UTF8 读取）
+
 ## 核心架构速记（讲思路时的参照）
 
 - 层次：Resource 定义层（GE/Ability）→ 实例层（Spec）→ 执行层（ASC/AttributeSet/AttributeData）→ 异步层（Task）→ 通信层（Tag）
