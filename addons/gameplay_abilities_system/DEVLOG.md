@@ -1460,3 +1460,168 @@ OnActive / WhileActive / OnRemoved 三时刻，逻辑不许知道表现存在。
   渲染验证可用 `--write-movie dir/frame.png`（movie writer 按固定 FPS 输出 PNG 序列），
   比 `get_viewport().get_texture().get_image()` 稳（后者在 Forward+ 下会卡死）。
 
+---
+
+## 21. 复盘：GameplayCue——表现与逻辑的最后一层解耦（2026-08-10 完成）
+
+（复盘由 AI 代笔：第 1+2 步骨架取自用户口头复述，第 3+4 步取自代码与提交信息。）
+
+### 问题本质
+
+`gameplay_cue_tags` 躺在 GE 上十几节没人消费。GE 说"打这个 tag"，谁听？UE 的答案是
+GameplayCueManager：**tag = 表现地址，逻辑只负责广播，表现自己订阅**。四步走：
+邮局事件流 → 参数小票 → 凭票制挂载 → 演示闭环。
+
+### 第 1 步：邮局事件流（OnActive/WhileActive/Executed/OnRemoved）
+
+- `GASGameplayCueManager`（Autoload）：`HandlerList` 内嵌薄类（注册去重 warn /
+  倒序删除 / broadcast 快照遍历防自反注册），`_handlers: Dictionary[FGameplayTag, HandlerList]`
+  ——嵌套泛型被拒后的正解（typed dict + 用户类值）；
+- **四事件**（对齐 UE `EGameplayCueEvent`）：INSTANT→EXECUTED（一次性消息）、
+  挂账后→ON_ACTIVE、移除→ON_REMOVED（唯一漏斗单点：到期/驱散/手动三条死亡路径
+  全汇入 `remove_active_effect` 一处 hook）；
+- 查无 handler **静默**——"表现空白合法"，地城回归十几次眩晕广播零报错实证；
+- 叠层 early return 不重发（LIMITED/REFRESH 直接 return，表现已活着，与 UE 同款）。
+
+### 第 2 步：参数小票（GASGameplayCueParameters）
+
+- 用户提议"直接传整个 spec"——**三个反驳**：① 解耦双向（表现不该摸逻辑内脏）；
+  ② 生命周期（spec 是 RefCounted，持续表现活 2 秒 spec 可能先死——快照离手即定）；
+  ③ 参数最小集（飘字要数字、火花要位置、震屏要强度）；
+- `_init(spec)` 构造器被拦：变相传 spec + `spec.source_asc` 可空裸写必崩 →
+  **小票空壳 + 广播点现场组装**，构造器不接 spec；
+- 签名三参统一全链路 `handler.call(tag, event, params)`——tag 数据当参数传不存薄类；
+  magnitude 取第一个 modifier（execution 类 GE 无 modifier 的缺口记入遗留）。
+
+### 第 3 步：凭票制 + 节点生灭
+
+- **两套 API**（UE 对照）：`ExecuteGameplayCue`（fire-and-forget 消息）vs
+  `AddGameplayCue/RemoveGameplayCue`（挂载，返回句柄）。持续 cue 必须被 spawn：
+  生命周期要载体、状态要存放处、销毁要句柄；
+- **GE 生命周期 = cue 生命周期**：ASC 应用持续 GE 自动 Add、到期自动 Remove，
+  "等号"由 Manager 兑现；
+- 用户两个好问题：① 两人都眩晕 = 一颗星还是两颗星？→ **两颗**——实例身份是
+  `(tag, target)` 组合键（UE 按 tag 全局复用是已知粗糙点，我们修正实例粒度）；
+  ② 复数 GE 共享 tag，移除时删哪个？→ 计数答得了"还有没人撑"，答不了"这局 GE
+  走了它的星必须灭"→ **凭票制**（门票代替引用原则第三例：effect handle 之后又一例）；
+- `ActiveCue` 薄类 + `_cue_instances`（票根→账页）+ `_active_cues`（组合键→账页，
+  Array 可哈希按内容、对象按身份）+ `_cue_factories` + `add_cue`（查账→0→1 调工厂
+  挂 target 下→计数+1→先领号后自增→发票；**没工厂也发票**，表现空白合法）+
+  `remove_cue`（凭票→计数-1→1→0 销毁节点销两本账→**旧票无害化 false**）；
+- 审查三连：`Callable()` 兜底（null 不能赋值类型）/ node 上类型 / 重复注册 warn。
+
+### 第 4 步：演示闭环
+
+眩晕 GE 配 `GameplayCue.Status.Stun`，桌游表现层注册工厂产眩晕星星节点（凭票生灭、
+双重施加复用一节点、旧票二次退场 false）；`ge_skeleton_stun.tres` 等测试资产配
+cue tag，回归断言 count handler + 小票 + 节点生灭（基础-24b~49）。
+
+### 踩的坑
+
+1. **迭代 Resource 本体崩溃**：`for tag in gameplay_cue_tags` → `_iter_next` 错误。
+   容器是 Resource 不可迭代，正确姿势 `for tag in container._tags`（内部 Dictionary，
+   **键是 FGameplayTag 对象不是 StringName**——StringName 只在 `_saved_tag_names`
+   序列化通道）；容器键与值类型不符的报错定位训练；
+2. **`_init(spec)` 小票构造器被拦**：变相传 spec + source_asc 可空裸写必崩；
+3. **嵌套 typed collection 不支持**（`Dictionary[FGameplayTag, Array[Callable]]` 非法）
+   → 薄类 + 组合键两招破解。
+
+### 原则沉淀
+
+- **逻辑不许知道表现存在**（信号只出不进）：逻辑广播、表现订阅，方向单向；
+- **门票代替引用**（第三例）：跨系统持有的凭据用 ID 不用引用，旧票优雅 false；
+- **快照离手即定**（第四例）：持续表现活着但 spec 可能先死——数据必须拷贝过境。
+
+---
+
+## 22. 复盘：TargetData 课——选目标这件事变成数据（2026-08-10~11 完成）
+
+（复盘由 AI 代笔，骨架与决策取自用户口头复述 + 会话记忆 + 代码。）
+
+### 问题本质
+
+`EffectContext.target_data` 空着、测试里 target 全是写死引用。"选目标"怎么变成
+数据？UE 的链路：`FGameplayAbilityTargetData`（数据容器）→
+`UGameplayAbilityTargetActor`（选择载体）→ `UAbilityTask_WaitTargetData`（等玩家
+确认的 Task）。三个需求逐步落地，一整课关账。
+
+### 需求 1：GASAbilityTargetData 数据容器
+
+- actors 集合 + location/has_location 位置快照 + 三工厂
+  （from_actor 单目标 / from_actors 多目标 + duplicate 快照隔离 / from_location 纯落点）；
+- get_actor 空容器**静默返回 null**——空目标是预期路径而非 bug（fail-open 判据：
+  查询返回否定答案是答案，不是事故）；
+- 补单测：基础-50~62 共 13 条（单/多/空/位置），**快照隔离**（原数组 append 不影响
+  target_data——duplicate(true) 的意义要验出来，否则是死代码）与 fail-open 契约钉死。
+
+### 需求 2：GASAbilityTargetActor（基类 + 2D 子类）
+
+**Godot 与 UE 的分水岭**：Node2D/Node3D 是兄弟类（共同祖先只有 Node），物理空间、
+相机全不同——UE 没有这个问题（AActor 活在唯一 3D 世界）。解法：
+**基类落 Node（坐标系无关）**，坐标系相关全推迟到子类虚函数/入口：
+`select_at`（2D 物理点选）/ `select_area`（形状查询范围多选）共用
+`_resolve_entity`（命中→过滤链翻译，null = 不可接受）。
+
+- **meta 桥接**：碰撞体挂 `meta("entity")` 指向实体（常量 `ENTITY_META` 放基类共享，
+  字典键字符串分裂的教训）；"谁有资格当目标"由挂 meta 的人决定；
+- **双层过滤**：物理层（collision_mask @export）/ 逻辑层（`filter: Callable` 注入，
+  is_valid 判空、fail-open 默认全收、拒收 = continue 找下一个、全拒 = 空选择）——
+  "UI 不可能成为 target"是物理层的价值（碰撞体是世界里物体的身份证）；
+- **持续选择**：缓存 + `selection_changed` 跳变沿 + confirm 买定离手（拷贝交付）。
+  输入"外部显式喂"（select_at 由游戏层驱动，headless 可测）；
+- **location 语义**：存实体位置（跟实体走）而非鼠标位置（每帧变）——全量比较
+  安全的前提；Vector3 保持不动（数据层不为眼前 2D 收窄，z 留给层深/高度/排序）；
+- 验证：基础-63~90 共 28 条（点选/跳变沿/取消/拷贝隔离/过滤器/范围多目标/单→多切换）。
+
+### 需求 3：GASAbilityTaskWaitTargetData
+
+- 注入 TargetActor 实例（非 UE 的传 class 自建——测试可控、2D/3D 通用一个 Task）；
+- `confirm_selection()`：confirm_target → **null 拒绝确认**（点空地不能确认技能，
+  任务继续等）/ 有 → 存结果 + end_task(false)；`cancel_selection()`：善后 + end_task(true)；
+- **结果交付**：Task 持有 + 能力 `get_target_data()` 读（不造带参信号绕开唯一漏斗；
+  信号回调时 task 还活着，queue_free 是下帧的事）；
+- **end_task(canceled) 覆写：仅取消路径善后** actor.cancel_target（能力打断 →
+  GA end_ability 遍历 end_task(true) → 善后自动执行，"谁打开选择谁负责关"）；
+- 验证：基础-91~111 共 21 条（运行态/空选拒绝/确认交付/取消清空/GA 集成全流程/
+  打断善后），含测试 GA `GAWaitTargetTest` 与裸宿主 trick
+  （裸 GASGameplayAbility + give_ability 注入 asc + 手动 is_active = true 过 _spawn 门禁）。
+
+### 踩的坑（新账）
+
+1. **跳变沿判定的"顺序比较"病根——同一个 bug 四次变体**：
+   ① 引用比较（old != new 实例）→ 每帧误发；② 提前 return 吞后比字段
+   （location 相同 return，actors 变化被吞）；③ if-elif 互斥吞分支（都 true +
+   location 同 → actors 永不比）；④ 手改时 elif→if 丢 null 门卫（首次 select_at 崩）。
+   **根治 = 思维模型从"分情况处理"换成"找不同"**：每个字段独立关卡、任何不同即
+   false、绝不提前 return 跳过字段。`is_same_as` 四步：null → has_location →
+   location → actors；
+2. **GDScript lambda 值捕获实锤**：`var f := func(): count += 1; f.call()` 后 count
+   仍为 0（最小脚本验证）——lambda 捕获局部变量是快照，改不动外部；回调改状态
+   必须走**成员变量 + 命名函数**（self 引用）或容器（数组/字典按引用）。
+   测试 5 个信号断言连环挂的根因；AI 自己写测试也踩了一遍；
+3. **新 class_name 必须 `--import` 重建全局类缓存**，否则 "not declared" 假错误；
+   场景编译失败时 Godot 不退出（WaitForExit 挂死）；
+4. `intersect_point` 返回 Array[Dictionary]（collider/collider_id/rid/shape），
+   无位置字段、**无顺序保证**——重叠时"取第一个"不可靠（z 排序记入想法清单）；
+5. `get_meta` 键不存在会 push_error → has_meta 守卫；Viewport.world_2d 存在
+   （Node 也能拿 2D 空间，文档确认）。
+
+### 验收记录
+
+| 范围 | 断言 | 结果 |
+|---|---|---|
+| TargetData 容器（基础-50~62） | 13 条 | ✓ |
+| TargetActor 点选/范围/过滤器（基础-63~90） | 28 条 | ✓ |
+| WaitTargetData Task（基础-91~111） | 21 条 | ✓ |
+| 回归合计 | 192/0 全绿 | ExitCode=0 |
+
+### 遗留与想法清单
+
+- DEVLOG 21/22 节复盘补写完成（本节）；demo 接真选择器（等真实需求）；
+- 重叠命中 z 排序 / AOE 圈视觉预览 / collide_with_areas 开关（测试用 StaticBody2D
+  规避）/ ge_damage_50.tres 死资产待删；
+- 下一课排队：更多 AbilityTask（WaitInput/WaitAnimNotify）或第三梯队
+  （Ability 间 tag 关系——block/cancel abilities with tags）。
+
+
+

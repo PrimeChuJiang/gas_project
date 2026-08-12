@@ -18,6 +18,15 @@ var _ta_signal_count := 0
 func _on_ta_selection_changed(_old_data: GASAbilityTargetData, _new_data: GASAbilityTargetData) -> void:
 	_ta_signal_count += 1
 
+var _wt_finished := false
+var _wt_canceled := false
+
+func _on_wt_task_finished() -> void:
+	_wt_finished = true
+
+func _on_wt_task_canceled() -> void:
+	_wt_canceled = true
+
 func _on_cue_factory(_params: GASGameplayCueParameters) -> Node:
 	_cue_factory_spawns += 1
 	_cue_factory_node = Node.new()
@@ -461,6 +470,80 @@ func _run_basic_regression() -> void:
 	ta_entity_b.queue_free()
 	ta_entity_c.queue_free()
 	ta_entity_d.queue_free()
+	await _timer(0.1)
+
+	var wt_actor := GASAbilityTargetActor2D.new()
+	wt_actor.name = "WaitTargetActor"
+	add_child(wt_actor)
+	var wt_body := StaticBody2D.new()
+	wt_body.name = "BodyWait"
+	wt_body.position = Vector2(700.0, 100.0)
+	var wt_shape := CollisionShape2D.new()
+	var wt_circle := CircleShape2D.new()
+	wt_circle.radius = 10.0
+	wt_shape.shape = wt_circle
+	wt_body.add_child(wt_shape)
+	add_child(wt_body)
+	var wt_entity := Node2D.new()
+	wt_entity.name = "等待目标实体"
+	wt_entity.position = wt_body.position
+	add_child(wt_entity)
+	wt_body.set_meta(GASAbilityTargetActor.ENTITY_META, wt_entity)
+	await get_tree().physics_frame
+
+	var wt_host := GASGameplayAbility.new()
+	var wt_host_dummy := _make_dummy("等待宿主", {&"Body": 100.0, &"MaxBody": 100.0, &"Mind": 50.0, &"MaxMind": 50.0,
+		&"Attack": 20.0, &"Defense": 5.0, &"Move": 2.0, &"Level": 1.0, &"CooldownReduction": 0.0})
+	wt_host_dummy.asc.give_ability(wt_host)
+	wt_host.is_active = true
+	_wt_finished = false
+	_wt_canceled = false
+	var wt_task := GASAbilityTaskWaitTargetData.create(wt_host, wt_actor)
+	wt_task.task_finished.connect(_on_wt_task_finished)
+	wt_task.task_canceled.connect(_on_wt_task_canceled)
+	_check(wt_task.is_running, "基础-91 Task 激活后处于运行态")
+	_check(not wt_task.confirm_selection(), "基础-92 无选择时确认被拒绝")
+	_check(wt_task.is_running, "基础-93 拒绝确认后任务继续等待")
+	_check(wt_actor.select_at(Vector2(700.0, 100.0)), "基础-94 选择器命中目标")
+	_check(wt_task.confirm_selection(), "基础-95 确认成功返回 true")
+	_check(_wt_finished, "基础-96 task_finished 已触发")
+	_check(not wt_task.is_running, "基础-97 确认后任务结束")
+	var wt_data := wt_task.get_target_data()
+	_check(wt_data != null and wt_data.get_actor() == wt_entity, "基础-98 能力拿到正确 TargetData")
+
+	var wt_task2 := GASAbilityTaskWaitTargetData.create(wt_host, wt_actor)
+	wt_task2.task_finished.connect(_on_wt_task_finished)
+	wt_task2.task_canceled.connect(_on_wt_task_canceled)
+	wt_actor.select_at(Vector2(700.0, 100.0))
+	wt_task2.cancel_selection()
+	_check(_wt_canceled, "基础-99 cancel_selection → task_canceled")
+	_check(not wt_task2.is_running, "基础-100 取消后任务结束")
+	_check(wt_actor.confirm_target() == null, "基础-101 取消后选择器状态被清空")
+
+	var wt_ga := GAWaitTargetTest.new()
+	wt_ga.target_actor = wt_actor
+	_check(wt_host_dummy.asc.give_ability(wt_ga), "基础-102 注入测试能力")
+	_check(wt_host_dummy.asc.try_activate_ability(wt_ga), "基础-103 GA 激活并挂起等待")
+	_check(wt_ga.wait_task != null and wt_ga.wait_task.is_running, "基础-104 能力内任务已创建并等待")
+	wt_actor.select_at(Vector2(700.0, 100.0))
+	_check(wt_ga.wait_task.confirm_selection(), "基础-105 模拟玩家确认目标")
+	_check(wt_ga.last_target_data != null and wt_ga.last_target_data.get_actor() == wt_entity, "基础-106 能力收到确认的 TargetData")
+	_check(not wt_ga.is_active, "基础-107 确认后能力结束")
+
+	var wt_ga2 := GAWaitTargetTest.new()
+	wt_ga2.target_actor = wt_actor
+	wt_host_dummy.asc.give_ability(wt_ga2)
+	wt_host_dummy.asc.try_activate_ability(wt_ga2)
+	wt_host_dummy.asc.cancel_ability(wt_ga2)
+	_check(not wt_ga2.is_active, "基础-108 施放中被打断 → 能力结束")
+	_check(wt_ga2.task_canceled_flag, "基础-109 能力打断 → 任务 task_canceled")
+	_check(wt_actor.confirm_target() == null, "基础-110 打断后选择器状态被清空")
+	_check(wt_ga2.wait_task == null or not wt_ga2.wait_task.is_running, "基础-111 任务随能力结束而终止")
+
+	wt_actor.queue_free()
+	wt_body.queue_free()
+	wt_entity.queue_free()
+	wt_host_dummy.queue_free()
 	await _timer(0.1)
 
 func _run_gameplay_regression() -> void:
