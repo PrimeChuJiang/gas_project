@@ -1,4 +1,4 @@
-# GAS 开发日志 · 调试与重构专场（2026-07-18 ~ 07-22）
+﻿# GAS 开发日志 · 调试与重构专场（2026-07-18 ~ 07-22）
 
 > 本文档记录一轮完整的 debug 之旅：三个被掩盖的真 bug、六个顺手根治的设计问题、
 > 以及沉淀下来的九条框架设计原则。用于温故，也是后续开发的基线。
@@ -1625,3 +1625,123 @@ cue tag，回归断言 count handler + 小票 + 节点生灭（基础-24b~49）�
 
 
 
+
+---
+
+## 22.5 补课：遗留小账收尾——z 排序 + 真选择器闭环（2026-08-14 完成）
+
+### 背景
+
+TargetData 课（第 22 节）遗留四笔小账：重叠命中 z 排序 / collide_with_areas 开关 /
+AOE 圈视觉预览 / demo 接真选择器。加上 ge_damage_50.tres 死资产（查证：磁盘早已不存在，
+git 历史里最后一次出现是多年前——账目自动清）。
+
+### 账目 1：重叠命中 z 排序（框架，用户实现）
+
+- **病根**：intersect_point 文档只承诺"returned in an array"——**无顺序保证**。
+  两个碰撞体重叠时"取第一个"= 听天由命（UE 3D 用射线最近交点天然确定，2D 没这福利）；
+- **契约**（红测试基础-112~117 钉死）：z_index 降序为主键，global y 降序做平手裁判
+  （俯视角惯例 y 越大越靠前）；只读节点自身 z_index，不沿父链累加 z_as_relative（注释说明限制）；
+- **实现**：
+results.sort_custom(_sort_result) 直传方法引用（比包 lambda 干净）+ 比较器
+  null 兜底 return false；as CollisionObject2D 防御转换（顺手统一了 _resolve_entity）；
+- **验证**：同点两体重叠→选 z 高者；交换 z→选新上层（红测试铁证：交换前数组顺序侥幸
+  通过，交换后必挂）；z 平局→y 大者胜。
+
+### 账目 2+3：demo2 接真选择器 + AOE 圈视觉预览（demo 侧，AI 代笔）
+
+场景：新增「落雷」技能（右键瞄准 → 预览圈跟随鼠标 → 左键落雷圈内全伤 → 右键取消）。
+
+- **怪物物理身份证**：demo2 实体本是纯数据（逻辑层手写距离碰撞），TargetActor 靠物理查询
+  干活——表现层给怪物 sprite 挂 StaticBody2D + 圆形 CollisionShape2D +
+  set_meta(ENTITY_META, monster)（"碰撞体是世界里物体的身份证"第二例），每帧随 sprite 同步；
+- **能力链路**：GAPlayerSmite（GASGameplayAbility 子类）activate → commit →
+  GASAbilityTaskWaitTargetData.create（注入场景创建的 TargetActor）→ 确认回调
+  game.do_smite(targets, center) → end_ability；复用 _apply_damage（同一 GE/公式）
+  与 blast_effect 信号（爆炸/音效/震屏全自动）——**零新资产**（按"先问和现在有什么区别"
+  砍掉了 ge_smite_damage.tres 与 smite_struck 信号）；
+- **瞄准驱动**：场景 _process 每帧 select_area(鼠标, 半径)（跳变沿保证不发洪水信号），
+  预览圈（Polygon2D 半透明圆 + Line2D 描边，旋转动画）跟随鼠标，空圈 confirm 被拒
+  （fail-closed 语义顺从）；
+- **输入**：右键激活/取消，左键确认（瞄准态独占左键，_process 跳过普攻分支）。
+
+### 测试侧踩坑（新账）
+
+1. **headless await process_frame 一帧不够，两帧才稳**：挪怪物 pos 后等一帧 sprite 还在
+   旧位置（物理查询扑空）。项目 TestScene 退出前 await 两帧——同款先例，统一双帧；
+2. **monsters 数组顺序不可靠**：重生是 erase + 3 秒后 append——smoke 测试杀一只怪后，
+   monsters[0] 已不是哥布林。按 index 引用怪物 = 脆；按"活 + 有物理身份证"筛选；
+3. **玩家 Attack=35 的暗雷**：初始铁剑 +15 没人记得——测试写死 20×1.8 会挂在真实属性上。
+   教训：**断言期望值一律读属性现算**（公式验证更真实）；
+4. **apply_base_value_change 钳制到 MaxHealth**：回血 9999 → Health=MaxHealth。想给目标
+   续命要明白这个语义（多目标二次伤害先满血复战）；
+5. **落雷秒杀低血量怪**：62 伤害 vs 45hp 狗头人 → 死亡 → respawn → freed → 访问崩。
+   多目标组合必须算血量（或回血后上）；
+6. 旧账复读：cancel_selection() 返回 **void**（拿 bool 包 _check 是编译错误）。
+
+### 账目 4：collide_with_areas 开关 —— **取消**（画蛇添足第二例）
+
+原始动机：select_area 的 shape 查询默认命中 Area2D。demo 怪物全用 StaticBody2D，
+**没有任何消费者**——"先问和现在有什么区别，答不上来就是不做"。连同 AOE 预览一起，
+本课已把"等真实需求"的两笔 demo 账消费完毕。
+
+### 验收记录
+
+| 范围 | 结果 |
+|---|---|
+| 桌游回归（含 z 排序 6 条） | 198/0 全绿 |
+| topdown 回归（含天罚 18 条） | 63/0 全绿 |
+| 双 demo UI 检查 | issues=0 |
+---
+
+## 23. 复盘：更多 AbilityTask——WaitInput（等输入，2026-08-14 完成）
+
+### 问题本质
+
+Task 家族第三课：Delay 等时间、WaitTargetData 等目标确认、WaitInput 等**玩家输入**。
+UE 对照：`UAbilityTask_WaitInputPress`（等按下，可带超时）/ `WaitInputRelease` /
+`WaitCancel`。能力在"等待"期间把控制权交给输入，同时保持可被打破（眩晕/打断走既有
+end_ability 取消链路）。
+
+### GASAbilityTaskWaitInput（框架，用户实现）
+
+- **API**：`create(ability, input_action: StringName, timeout: float = -1.0)`——
+  timeout <= 0 不限时；按下 → `end_task(false)`（成功），超时 → `end_task(true)`（取消）；
+- **按键检测姿势：`_process` 轮询 `Input.is_action_just_pressed`**（而非 `_input` 事件）——
+  三个理由：① headless 测试用 `Input.action_press("attack")` 只改动作状态、**不派发
+  _input 事件**，轮询才模拟得了按键；② 代码一行，不用拆事件类型；③ 与超时计时
+  共用同一个 `_process`，一套机制干两件事；
+- **超时语义**：`_timer += delta`（Delay 同款骨架），`_timeout > 0.0` 才计时；
+  超时检查在按键之前（同帧超时 + 按键 = 窗口已关，超时优先）；
+- **捕获即退场**：`is_action_just_pressed` 在动作保持按下时连续多帧 true——但
+  WaitInput 按到即 `end_task` 退场（基类 `end_task` 里 `set_process(false)`），
+  多帧 true 无副作用（这个坑提前想过，没踩）；
+- **取消善后零新代码**：能力打断 → `end_ability` 遍历 `end_task(true)`（第 1 节
+  Bug 2 的法条第三次兑现）。
+
+### 连击场景（demo 侧，AI 代笔）
+
+「连击」：普通攻击后开 0.6s 窗口（WaitInput 等 attack 键），按到 → 强化斩击
+（伤害 ×1.5、范围 110、弧 50°），超时落空。
+
+- **开窗点**：`do_entity_melee_attack` / `spawn_projectiles` 玩家攻击落点后调
+  `player.open_combo_window()`（`try_activate_ability(combo)`，已激活则拒绝）；
+- **防无限连**：`do_entity_melee_attack` 加第三参 `open_combo: bool = true`，
+  连击斩传 false——"两份漏斗必然分叉"原则的又一实践（不加参数就会复制伤害循环）；
+- **按键消费**：场景层 attack 分支 `if not combo_ability.is_active: try_attack()`——
+  窗口内按键被 WaitInput 消费，不触发普通攻击（一次按键双重效果的解药）；
+- **验证**：连击-01~12（普攻开窗/窗口内按键触发/×1.5 伤害公式/超时关闭不触发/
+  打断善后），topdown 回归 63 → **75/0**，桌游 198/0 无回归。
+
+### 测试侧踩坑（新账）
+
+1. **普攻冷却挡住第二次开窗**：连击-04 后 2 帧内 `try_attack` 被 CD（0.55s）拒收——
+   开窗依赖攻击落点，而攻击本身有冷却。等待 0.6s 再测；
+2. **伤害累计致死 freed**：兽人 95hp 吃三刀（31+48.5+31）→ 死亡 → respawn →
+   freed → `get_attr` 崩。回血复战（apply_base_value_change 9999 → 钳制 MaxHealth，
+   上一课天罚的同款语义）。
+
+### 下一课排队
+
+- **WaitAnimNotify**（等动画通知）——动画与逻辑时序解耦；
+- 之后第三梯队：Ability 间 tag 关系（block / cancel abilities with tags）。

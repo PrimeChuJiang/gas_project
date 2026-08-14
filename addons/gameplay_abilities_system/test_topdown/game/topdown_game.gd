@@ -32,6 +32,12 @@ const MAP: Array[String] = [
 const TILE_SIZE: float = 32.0
 const RESPAWN_DELAY: float = 3.0
 const MONSTER_GROWTH_PER_LEVEL: float = 0.12
+const SMITE_RADIUS: float = 90.0
+const SMITE_COEFF: float = 1.8
+const COMBO_WINDOW: float = 0.6
+const COMBO_COEFF: float = 1.5
+const COMBO_RANGE: float = 110.0
+const COMBO_ARC_DEG: float = 50.0
 
 const TAG_ATTACK := &"Ability.Attack"
 const TAG_ATTACK_COOLDOWN := &"Ability.Attack.Cooldown"
@@ -144,7 +150,15 @@ func _spawn_world() -> void:
 	var ability_tags := FGameplayTagContainer.new()
 	ability_tags.add_tag(GameplayTags.request_gameplay_tag(TAG_ATTACK))
 	ability.ability_tags = ability_tags
+	var smite := GAPlayerSmite.new()
+	smite.game = self
+	player.smite_ability = smite
+	var combo := GAPlayerCombo.new()
+	combo.game = self
+	player.combo_ability = combo
 	player.setup_player(hero_attrs, ability)
+	player.asc.give_ability(smite)
+	player.asc.give_ability(combo)
 	player.pos = _tile_to_world(_player_spawn)
 	player.died.connect(_on_player_died)
 	player.attr_set.leveled_up.connect(func(level: int) -> void:
@@ -311,7 +325,7 @@ func get_current_attack_form() -> TopdownAttackForm:
 			current = form
 	return current
 
-func do_entity_melee_attack(source: TopdownEntity, form: TopdownAttackForm) -> void:
+func do_entity_melee_attack(source: TopdownEntity, form: TopdownAttackForm, open_combo: bool = true) -> void:
 	attack_performed.emit(form, source)
 	if source is TopdownPlayer:
 		var hit_count := 0
@@ -330,6 +344,8 @@ func do_entity_melee_attack(source: TopdownEntity, form: TopdownAttackForm) -> v
 			message.emit("斩击命中 %d 个敌人" % hit_count)
 		else:
 			message.emit("斩击挥空……")
+		if open_combo:
+			player.open_combo_window()
 	else:
 		var to_player := player.pos - source.pos
 		if to_player.length() <= form.range + player.RADIUS:
@@ -352,6 +368,16 @@ func spawn_projectiles(form: TopdownAttackForm, count: int) -> void:
 		projectile.form = form
 		projectile.source = player
 		projectiles.append(projectile)
+	player.open_combo_window()
+
+func do_combo_strike() -> void:
+	var form := TopdownAttackForm.new()
+	form.kind = TopdownAttackForm.Kind.MELEE_ARC
+	form.form_name = "连击"
+	form.damage_coefficient = COMBO_COEFF
+	form.range = COMBO_RANGE
+	form.arc_half_angle_deg = COMBO_ARC_DEG
+	do_entity_melee_attack(player, form, false)
 
 func spawn_monster_projectile(monster: TopdownMonster, dir: Vector2) -> void:
 	var form := TopdownAttackForm.new()
@@ -403,6 +429,20 @@ func _apply_damage(source: TopdownEntity, target: TopdownEntity, form: TopdownAt
 	source.asc.apply_gameplay_effect_spec_to_target(spec, target.asc)
 	var damage := maxf(1.0, source.get_attr(&"Attack") * form.damage_coefficient - target.get_attr(&"Defense"))
 	damage_applied.emit(source.display_name, target.display_name, damage, target, source)
+
+func do_smite(targets: Array[TopdownEntity], center: Vector2) -> void:
+	if targets.is_empty():
+		return
+	var form := TopdownAttackForm.new()
+	form.kind = TopdownAttackForm.Kind.PIERCE_BLAST
+	form.form_name = "落雷"
+	form.damage_coefficient = SMITE_COEFF
+	form.splash_radius = SMITE_RADIUS
+	for target in targets:
+		_apply_damage(player, target, form)
+	attack_performed.emit(form, player)
+	blast_effect.emit(center, SMITE_RADIUS)
+	message.emit("落雷！命中 %d 个敌人" % targets.size())
 
 func _on_monster_died(entity: TopdownEntity) -> void:
 	var monster := entity as TopdownMonster

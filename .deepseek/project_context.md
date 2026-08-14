@@ -1,7 +1,7 @@
 # project_context.md —— 项目状态快照
 
 > 本文件记录**已验证/已落地**的事实。权威源头：仓库内 DEVLOG.md、git 历史。
-> 最后更新：2026-08-10（会话 3，GameplayCue 第 1+2 步关账、第 3 步开局）
+> 最后更新：2026-08-14（会话 6，遗留小账收尾 + WaitInput 连击课关账）
 
 ## 项目一句话
 
@@ -119,8 +119,27 @@ Godot 4.7（Forward Plus）下用 GDScript 复刻 UE GameplayAbilitySystem 单�
 - **新账**：GDScript lambda 值捕获（回调改外部变量无效，成员变量+命名函数）——
   我自己写测试也踩了；新 class_name 需 --import 重建类缓存；场景编译失败时
   Godot 不退出会挂死 WaitForExit
-- **欠账**：DEVLOG 第 21 节（GameplayCue）与 22 节（TargetData 课）复盘未写；
-  demo 未接真选择器（等真实需求）
+- **已还欠账**（git `a4a0b9d` 已推送）：DEVLOG 第 21 节（GameplayCue 四步）与
+  第 22 节（TargetData 课三需求）复盘已补写
+- **遗留小账收尾**（2026-08-14，DEVLOG 22.5）：
+  - ✅ z 排序（框架，用户实现）：sort_custom + 契约（z 降序、y 平手裁判），
+    红测试基础-112~117 转绿
+  - ✅ demo2 接真选择器 + AOE 预览（落雷技能：右键瞄准/左键确认/右键取消，
+    WaitTargetData 全链路，怪物物理身份证 StaticBody2D+ENTITY_META）
+  - ✅ ge_damage_50.tres 死资产（查证：磁盘早已不存在）
+  - ❌ collide_with_areas 开关：无消费者，画蛇添足取消（第二例）
+  - 测试侧新账：headless await 两帧才稳；monsters 数组顺序不可靠（重生 append）；
+    Attack=35 暗雷（铁剑+15）→ 断言读属性现算
+- **回归**：桌游 198/0 + topdown 63/0 全绿，双 UI 检查 issues=0
+- **WaitInput 课（第 23 节）关账**（2026-08-14）：
+  - ✅ `GASAbilityTaskWaitInput`（框架，用户实现）：等输入动作 + 超时窗口
+    （`create(ability, input_action, timeout=-1)`，按下 end_task(false)/超时 end_task(true)，
+    轮询 `is_action_just_pressed`——headless 可模拟，与超时共用 _process）
+  - ✅ demo2 连击技能：普攻后 0.6s 窗口按攻击键 → 强化斩击（×1.5/110/50°），
+    开窗点在 game 攻击落点、`open_combo` 参数防无限连、场景层 combo active 时按键被消费
+  - ✅ 回归：topdown 63→**75/0**（连击 12 条），桌游 198/0 无回归
+  - 测试新账：普攻 CD 挡二次开窗（先等 0.6s）；伤害累计致死 freed（回血复战）
+- **下一课排队**：WaitAnimNotify（等动画通知）→ 第三梯队（Ability 间 tag 关系）
 - **想法清单**：重叠命中 z 排序、AOE 圈视觉预览、collide_with_areas 开关、
   ge_damage_50.tres 死资产待删
 - 环境备忘：同会话 4

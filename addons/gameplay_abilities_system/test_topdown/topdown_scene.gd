@@ -49,6 +49,10 @@ var _game_over_shown: bool = false
 var _player_dead_anim: float = -1.0
 var _player_dead_offset: float = 0.0
 
+var _smite_target_actor: GASAbilityTargetActor2D = null
+var _aim_circle: Polygon2D = null
+var _aim_edge: Line2D = null
+
 var _anim_time: float = 0.0
 var _shake_timer: float = 0.0
 var _shake_amount: float = 0.0
@@ -89,6 +93,11 @@ func _ready() -> void:
 	_build_sfx()
 	_build_world_visuals()
 	_build_hud()
+	_smite_target_actor = GASAbilityTargetActor2D.new()
+	_smite_target_actor.name = "SmiteTargetActor"
+	_smite_target_actor.filter = _is_smite_target
+	world.add_child(_smite_target_actor)
+	_build_aim_circle()
 	game = TopdownGame.new()
 	game.name = "Game"
 	add_child(game)
@@ -256,6 +265,67 @@ func _build_player_light() -> void:
 	light.texture_scale = 3.0
 	world.add_child(light)
 
+## ---------------- 落雷瞄准（账目 4+5：真选择器 + AOE 预览圈） ----------------
+
+func _is_smite_target(node: Node) -> bool:
+	return node is TopdownMonster and (node as TopdownMonster).is_alive()
+
+func _build_aim_circle() -> void:
+	var pts := PackedVector2Array()
+	for i in 32:
+		var a := TAU * float(i) / 32.0
+		pts.append(Vector2(cos(a), sin(a)) * TopdownGame.SMITE_RADIUS * WORLD_SCALE)
+	_aim_circle = Polygon2D.new()
+	_aim_circle.name = "AimCircle"
+	_aim_circle.polygon = pts
+	_aim_circle.color = Color(1.0, 0.85, 0.4, 0.16)
+	_aim_circle.z_index = 55
+	_aim_circle.visible = false
+	world.add_child(_aim_circle)
+	_aim_edge = Line2D.new()
+	_aim_edge.name = "AimEdge"
+	_aim_edge.points = pts
+	_aim_edge.width = 2.0
+	_aim_edge.default_color = Color(1.0, 0.85, 0.4, 0.85)
+	_aim_edge.z_index = 56
+	_aim_edge.visible = false
+	world.add_child(_aim_edge)
+
+func _is_aiming() -> bool:
+	return game != null and game.player != null and game.player.smite_ability.is_active
+
+func _tick_aim(delta: float) -> void:
+	var mouse_world := get_global_mouse_position()
+	_smite_target_actor.select_area(mouse_world, TopdownGame.SMITE_RADIUS * WORLD_SCALE)
+	_aim_circle.visible = true
+	_aim_edge.visible = true
+	_aim_circle.position = mouse_world
+	_aim_edge.position = mouse_world
+	_aim_circle.rotation += delta * 0.8
+	hint_label.text = "左键落雷 · 右键取消"
+
+func _stop_aim_visuals() -> void:
+	_aim_circle.visible = false
+	_aim_edge.visible = false
+
+func _input(event: InputEvent) -> void:
+	if not game or not game.player or _game_over_shown:
+		return
+	if not (event is InputEventMouseButton and event.pressed):
+		return
+	var smite: GAPlayerSmite = game.player.smite_ability
+	match event.button_index:
+		MOUSE_BUTTON_RIGHT:
+			if smite.is_active:
+				if smite.wait_task:
+					smite.wait_task.cancel_selection()
+			else:
+				game.player.try_smite(_smite_target_actor)
+		MOUSE_BUTTON_LEFT:
+			if smite.is_active and smite.wait_task:
+				if not smite.wait_task.confirm_selection():
+					_on_message("[color=#ffcc66]落雷失败：圈内没有目标[/color]")
+
 ## ---------------- 实体渲染 ----------------
 
 func _sync_all_sprites() -> void:
@@ -304,6 +374,14 @@ func _ensure_entity_sprite(entity: TopdownEntity) -> Sprite2D:
 		bar.color = Color(0.8, 0.2, 0.2, 0.9)
 		sprite.add_child(bar)
 		_entity_bars[entity] = bar
+		var body := StaticBody2D.new()
+		var shape := CollisionShape2D.new()
+		var circle := CircleShape2D.new()
+		circle.radius = TopdownEntity.RADIUS * WORLD_SCALE
+		shape.shape = circle
+		body.add_child(shape)
+		sprite.add_child(body)
+		body.set_meta(GASAbilityTargetActor.ENTITY_META, entity)
 	if entity is TopdownPlayer:
 		_build_player_light()
 		entity.health_changed.connect(_on_entity_health_changed.bind(entity))
@@ -456,7 +534,7 @@ func _build_hud() -> void:
 	log_panel.add_child(log_label)
 
 	hint_label = Label.new()
-	hint_label.text = "WASD 移动 · 空格/左键 攻击 · E 开箱 · R 重开（攻击形态随等级进化）"
+	hint_label.text = "WASD 移动 · 空格/左键 攻击 · 右键 落雷（圈选 AOE） · E 开箱 · R 重开"
 	hint_label.add_theme_color_override("font_color", Color(0.55, 0.6, 0.68, 1))
 	hint_label.add_theme_font_size_override("font_size", 12)
 	vbox.add_child(hint_label)
@@ -746,11 +824,18 @@ func _process(delta: float) -> void:
 	var input_dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	game.player.move_input = input_dir
 	_update_player_facing()
+	if _is_aiming():
+		_tick_aim(delta)
+		_sync_rendering(delta)
+		return
 	if Input.is_action_just_pressed("attack"):
-		game.player.try_attack()
+		if not game.player.combo_ability.is_active:
+			game.player.try_attack()
 	if Input.is_action_just_pressed("interact"):
 		game.try_interact()
 	_sync_rendering(delta)
+	if _aim_circle and _aim_circle.visible:
+		_stop_aim_visuals()
 
 ## 攻击朝向跟随鼠标（世界坐标），鼠标未动时退回移动方向
 func _update_player_facing() -> void:

@@ -16,6 +16,8 @@ var move_input: Vector2 = Vector2.ZERO
 var facing: Vector2 = Vector2.RIGHT
 
 var attack_ability: GASGameplayAbility
+var smite_ability: GAPlayerSmite
+var combo_ability: GAPlayerCombo
 var gear_slots: Dictionary = {}
 
 func setup_player(p_attrs: Dictionary[StringName, float], p_attack_ability: GASGameplayAbility) -> void:
@@ -60,6 +62,17 @@ func try_attack() -> bool:
 	if not is_alive():
 		return false
 	return asc.try_activate_ability(attack_ability)
+
+func try_smite(target_actor: GASAbilityTargetActor2D) -> bool:
+	if not is_alive():
+		return false
+	smite_ability.target_actor = target_actor
+	return asc.try_activate_ability(smite_ability)
+
+func open_combo_window() -> bool:
+	if combo_ability == null or combo_ability.is_active:
+		return false
+	return asc.try_activate_ability(combo_ability)
 
 func get_level() -> int:
 	return int(get_attr(TopdownAttributeSet.ATTR_LEVEL))

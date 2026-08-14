@@ -29,6 +29,8 @@ func run_all() -> void:
 	await _run_basic_regression()
 	await _run_gameplay_regression()
 	await _run_presentation_smoke()
+	await _run_smite_regression()
+	await _run_combo_regression()
 	print("=== 回归结束：%s（通过 %d / 失败 %d）===" % ["ALL PASS" if is_pass() else "HAS FAILURE", _pass_count, _fail_count])
 
 func _timer(seconds: float) -> void:
@@ -232,3 +234,116 @@ func _run_gameplay_regression() -> void:
 		&"Defense": 0.0, &"MoveSpeed": 0.0, &"Level": 1.0, &"XP": 0.0})
 	dummy_source.asc.apply_gameplay_effect_spec_to_target(lethal, game.player.asc)
 	_check(_game_over_flag, "玩法-28 玩家死亡触发 game_over")
+
+## ---------------- 天罚选择器回归（账目 4+5：真选择器 + AOE 预览） ----------------
+
+func _run_smite_regression() -> void:
+	print("=== 天罚选择器回归 ===")
+	var scene := get_parent() as Node
+	var sg: TopdownGame = scene.get("game")
+	if sg == null or sg.monsters.is_empty():
+		_check(false, "天罚-00 场景 game 可用")
+		return
+	var smite: GAPlayerSmite = sg.player.smite_ability
+	var actor := scene.get("_smite_target_actor") as GASAbilityTargetActor2D
+	if smite == null or actor == null:
+		_check(false, "天罚-00 能力与选择器已装配")
+		return
+	sg._running = false
+	sg._respawn_queue.clear()
+	sg.player.attr_set.apply_base_value_change(&"Health", 9999.0)
+	var radius_px := TopdownGame.SMITE_RADIUS * 2.0
+	var victims: Array[TopdownMonster] = []
+	for m in sg.monsters:
+		if m.is_alive() and scene.get("_entity_sprites").has(m) and victims.size() < 2:
+			victims.append(m)
+	if victims.size() < 2:
+		_check(false, "天罚-00 找到两只带物理身份证的活怪")
+		return
+	var victim_a: TopdownMonster = victims[0]
+	var victim_c: TopdownMonster = victims[1]
+	var attack := sg.player.get_attr(&"Attack")
+
+	victim_a.pos = Vector2(64.0, 64.0)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var a_hp0 := victim_a.get_attr(&"Health")
+	_check(sg.player.try_smite(actor), "天罚-01 右键激活落雷能力")
+	_check(smite.is_active and smite.wait_task != null and smite.wait_task.is_running, "天罚-02 瞄准态：Task 运行中")
+	_check(actor.select_area(victim_a.pos * 2.0, radius_px), "天罚-03 瞄准圈住目标")
+	_check(smite.wait_task.confirm_selection(), "天罚-04 左键确认落雷")
+	_check(not smite.is_active, "天罚-05 落雷后能力结束")
+	var a_expected := maxf(1.0, attack * 1.8 - victim_a.get_attr(&"Defense"))
+	_check(is_equal_approx(victim_a.get_attr(&"Health"), a_hp0 - a_expected), "天罚-06 公式伤害 max(1, 攻×1.8−防)")
+
+	_check(sg.player.try_smite(actor), "天罚-07 再次激活")
+	_check(not actor.select_area(Vector2(1600.0, 700.0), radius_px), "天罚-08 瞄准远处空地返回 false（选择器清空）")
+	_check(not smite.wait_task.confirm_selection(), "天罚-09 空圈确认被拒（fail-closed）")
+	_check(smite.is_active and smite.wait_task.is_running, "天罚-10 拒绝后能力继续等待")
+	smite.wait_task.cancel_selection()
+	_check(not smite.is_active, "天罚-11 右键取消后能力结束")
+	_check(is_equal_approx(victim_a.get_attr(&"Health"), a_hp0 - a_expected), "天罚-12 取消不造成伤害")
+
+	victim_a.attr_set.apply_base_value_change(&"Health", 9999.0)
+	victim_c.attr_set.apply_base_value_change(&"Health", 9999.0)
+	victim_a.pos = Vector2(96.0, 96.0)
+	victim_c.pos = Vector2(128.0, 96.0)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var a2_hp0 := victim_a.get_attr(&"Health")
+	var c_hp0 := victim_c.get_attr(&"Health")
+	var mid := (victim_a.pos + victim_c.pos) * 0.5 * 2.0
+	_check(sg.player.try_smite(actor), "天罚-13 多目标激活")
+	_check(actor.select_area(mid, radius_px), "天罚-14 中间圈住两只")
+	_check(smite.wait_task.confirm_selection(), "天罚-15 确认落雷")
+	var a_expected2 := maxf(1.0, attack * 1.8 - victim_a.get_attr(&"Defense"))
+	var c_expected := maxf(1.0, attack * 1.8 - victim_c.get_attr(&"Defense"))
+	_check(is_equal_approx(victim_a.get_attr(&"Health"), a2_hp0 - a_expected2), "天罚-16 目标A 满血复战后受公式伤害")
+	_check(is_equal_approx(victim_c.get_attr(&"Health"), c_hp0 - c_expected), "天罚-17 目标C 受公式伤害")
+	_check(not smite.is_active, "天罚-18 能力结束")
+	sg._running = true
+
+## ---------------- 连击回归（WaitInput：攻击后 0.6s 窗口内再按攻击键 → 强化斩击） ----------------
+
+func _run_combo_regression() -> void:
+	print("=== 连击回归 ===")
+	var g := _new_game()
+	var orc: TopdownMonster = g.monsters[2]
+	orc.pos = g.player.pos + Vector2(60.0, 0.0)
+	g.player.attr_set.apply_base_value_change(&"Health", 9999.0)
+	var attack := g.player.get_attr(&"Attack")
+	var combo: GAPlayerCombo = g.player.combo_ability
+	if combo == null:
+		_check(false, "连击-00 连击能力已装配")
+		return
+	Input.action_release("attack")
+
+	var orc_hp0 := orc.get_attr(&"Health")
+	var defense := orc.get_attr(&"Defense")
+	_check(g.player.try_attack(), "连击-01 普通攻击")
+	_check(combo.is_active and combo.wait_task != null and combo.wait_task.is_running, "连击-02 攻击后连击窗口开启")
+	_check(is_equal_approx(orc.get_attr(&"Health"), orc_hp0 - (attack - defense)), "连击-03 普攻伤害 max(1, 攻−防)")
+
+	var hp_after_hit := orc.get_attr(&"Health")
+	Input.action_press("attack")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	Input.action_release("attack")
+	_check(not combo.is_active, "连击-04 窗口内按攻击键 → 连击触发")
+	_check(is_equal_approx(orc.get_attr(&"Health"), hp_after_hit - (attack * 1.5 - defense)), "连击-05 强化斩击伤害 max(1, 攻×1.5−防)")
+	await _timer(0.6)
+	orc.attr_set.apply_base_value_change(&"Health", 9999.0)
+	var hp_before_timeout := orc.get_attr(&"Health")
+	_check(g.player.try_attack(), "连击-06 冷却过后再次攻击开窗")
+	_check(combo.is_active, "连击-07 窗口开启")
+	await _timer(0.7)
+	_check(not combo.is_active, "连击-08 0.6s 超时窗口关闭")
+	_check(is_equal_approx(orc.get_attr(&"Health"), hp_before_timeout - (attack - defense)), "连击-09 超时不触发强化斩击")
+
+	_check(g.player.try_attack(), "连击-10 攻击开窗")
+	_check(combo.is_active, "连击-11 窗口开启")
+	g.player.asc.cancel_ability(combo)
+	_check(not combo.is_active, "连击-12 能力打断 → 窗口关闭（Task 取消善后）")
+
+	g.queue_free()
+	await _timer(0.1)

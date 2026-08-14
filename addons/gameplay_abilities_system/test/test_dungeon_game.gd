@@ -546,6 +546,68 @@ func _run_basic_regression() -> void:
 	wt_host_dummy.queue_free()
 	await _timer(0.1)
 
+	var ov_actor := GASAbilityTargetActor2D.new()
+	ov_actor.name = "OverlapTargetActor"
+	add_child(ov_actor)
+	var ov_body_1 := StaticBody2D.new()
+	ov_body_1.name = "BodyZ5"
+	ov_body_1.position = Vector2(800.0, 100.0)
+	var ov_shape_1 := CollisionShape2D.new()
+	var ov_circle_1 := CircleShape2D.new()
+	ov_circle_1.radius = 10.0
+	ov_shape_1.shape = ov_circle_1
+	ov_body_1.add_child(ov_shape_1)
+	add_child(ov_body_1)
+	var ov_entity_1 := Node2D.new()
+	ov_entity_1.name = "上层实体"
+	ov_entity_1.position = ov_body_1.position
+	ov_entity_1.z_index = 5
+	add_child(ov_entity_1)
+	ov_body_1.z_index = 5
+	ov_body_1.set_meta(GASAbilityTargetActor.ENTITY_META, ov_entity_1)
+	var ov_body_2 := StaticBody2D.new()
+	ov_body_2.name = "BodyZ0"
+	ov_body_2.position = Vector2(800.0, 100.0)
+	var ov_shape_2 := CollisionShape2D.new()
+	var ov_circle_2 := CircleShape2D.new()
+	ov_circle_2.radius = 12.0
+	ov_shape_2.shape = ov_circle_2
+	ov_body_2.add_child(ov_shape_2)
+	add_child(ov_body_2)
+	var ov_entity_2 := Node2D.new()
+	ov_entity_2.name = "下层实体"
+	ov_entity_2.position = ov_body_2.position
+	ov_entity_2.z_index = 0
+	add_child(ov_entity_2)
+	ov_body_2.z_index = 0
+	ov_body_2.set_meta(GASAbilityTargetActor.ENTITY_META, ov_entity_2)
+	await get_tree().physics_frame
+
+	_check(ov_actor.select_at(Vector2(800.0, 100.0)), "基础-112 重叠命中点选返回 true")
+	_check(ov_actor.confirm_target().get_actor() == ov_entity_1, "基础-113 重叠命中选 z 更高的实体")
+	ov_entity_1.z_index = 0
+	ov_body_1.z_index = 0
+	ov_entity_2.z_index = 5
+	ov_body_2.z_index = 5
+	_check(ov_actor.select_at(Vector2(800.0, 100.0)), "基础-114 交换 z 后再次点选")
+	_check(ov_actor.confirm_target().get_actor() == ov_entity_2, "基础-115 z 交换后选到新上层")
+	ov_entity_1.z_index = 0
+	ov_body_1.z_index = 0
+	ov_entity_2.z_index = 0
+	ov_body_2.z_index = 0
+	ov_body_2.position = Vector2(800.0, 110.0)
+	ov_entity_2.position = ov_body_2.position
+	await get_tree().physics_frame
+	_check(ov_actor.select_at(Vector2(800.0, 100.0)), "基础-116 z 平局时点选仍返回 true")
+	_check(ov_actor.confirm_target().get_actor() == ov_entity_2, "基础-117 z 平局时选 y 更大的实体（俯视角惯例）")
+
+	ov_actor.queue_free()
+	ov_body_1.queue_free()
+	ov_body_2.queue_free()
+	ov_entity_1.queue_free()
+	ov_entity_2.queue_free()
+	await _timer(0.1)
+
 func _run_gameplay_regression() -> void:
 	print("=== 地城桌游回归 ===")
 	var g := _new_game()

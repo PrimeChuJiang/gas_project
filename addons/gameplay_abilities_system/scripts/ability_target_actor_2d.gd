@@ -13,6 +13,7 @@ func select_at(world_pos: Vector2) -> bool:
 	physics_params.position = world_pos
 	physics_params.collision_mask = collision_mask
 	var results := space.intersect_point(physics_params)
+	results.sort_custom(_sort_result)
 	for result in results:
 		var entity := _resolve_entity(result)
 		if entity == null:
@@ -51,7 +52,7 @@ func select_area(center: Vector2, radius: float) -> bool:
 	return true
 
 func _resolve_entity(result: Dictionary) -> Node:
-	var collider: CollisionObject2D = result.get("collider")
+	var collider: CollisionObject2D = result.get("collider") as CollisionObject2D
 	if collider == null or not collider.has_meta(ENTITY_META):
 		return null
 	var entity: Node = collider.get_meta(ENTITY_META)
@@ -60,3 +61,13 @@ func _resolve_entity(result: Dictionary) -> Node:
 	if filter.is_valid() and not filter.call(entity):
 		return null
 	return entity
+
+## 只按自身 z_index 排序，不沿父链累加 z_as_relative（有父级层叠时以父节点为准即可）
+func _sort_result(r1: Dictionary, r2: Dictionary) -> bool:
+	var collider1: CollisionObject2D = r1.get("collider") as CollisionObject2D
+	var collider2: CollisionObject2D = r2.get("collider") as CollisionObject2D
+	if collider1 == null or collider2 == null:
+		return false
+	if collider1.z_index != collider2.z_index:
+		return collider1.z_index > collider2.z_index
+	return collider1.global_position.y > collider2.global_position.y
