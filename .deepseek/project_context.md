@@ -1,7 +1,7 @@
 # project_context.md —— 项目状态快照
 
 > 本文件记录**已验证/已落地**的事实。权威源头：仓库内 DEVLOG.md、git 历史。
-> 最后更新：2026-08-14（会话 6，遗留小账收尾 + WaitInput 连击课关账）
+> 最后更新：2026-08-14（会话 6，WaitInput/WaitAnimNotify/互斥矩阵三课关账）
 
 ## 项目一句话
 
@@ -139,7 +139,26 @@ Godot 4.7（Forward Plus）下用 GDScript 复刻 UE GameplayAbilitySystem 单�
     开窗点在 game 攻击落点、`open_combo` 参数防无限连、场景层 combo active 时按键被消费
   - ✅ 回归：topdown 63→**75/0**（连击 12 条），桌游 198/0 无回归
   - 测试新账：普攻 CD 挡二次开窗（先等 0.6s）；伤害累计致死 freed（回血复战）
-- **下一课排队**：WaitAnimNotify（等动画通知）→ 第三梯队（Ability 间 tag 关系）
+- **WaitAnimNotify 课（第 24 节）关账**（2026-08-14）：
+  - ✅ `GASAbilityTaskWaitAnimNotify`（框架，用户实现）：等通知源动态信号 +
+    名称匹配（`create(ability, source, signal, name)`）；**CONNECT_ONE_SHOT 语义
+    陷阱**——按触发次数断连而非按匹配断连，正确姿势普通连接 + is_running 守卫
+  - ✅ 落雷前摇：确认后法阵 0.4s（表现层 _vfx）→ 命中帧 emit anim_notify →
+    结算；快照离手即定（targets/center confirm 时定）；前摇可打断（无伤害 +
+    通知无人听合法）
+  - ✅ 回归：topdown 75→**92/0**（天罚重写 34 条），桌游 198/0，UI 0
+- **互斥矩阵课（第 25 节）关账**（2026-08-14）：
+  - ✅ 框架（用户）：`block_abilities_with_tags` / `cancel_abilities_with_tags`
+    两字段 + try_activate_ability 四段式（block 拒绝 → cancel 打断 → 激活）；
+    **审查抓出字段张冠李戴**（记法：has_any 容器=我的列表，参数=对方身份 tag）
+  - ✅ 狂暴技能（Q）：3s 攻击力 ×2，buff 能力保持激活（block 窗口），
+    tag 消失（GE 到期/移除）→ 结束；覆写 end_ability 断连防 RefCounted 泄漏；
+    互斥自洽方案：狂暴 cancel 落雷前摇 + block 落雷激活（用户否决自相矛盾版）
+  - ✅ 回归：topdown 92→**111/0**（狂暴 19 条），桌游 198/0，UI 0
+- **UE 语义查证**（AGENTS.md 已记）：tranek/GASDocumentation 4.6.9 Ability Tags
+  表格（四字段区别：查 ASC 状态 vs 查能力 AbilityTags）
+- **下一课排队**：第三梯队全部完成 ✅。可选：第二梯队余项（WaitAnimNotify 后无）、
+  加餐池（tag 祖先计数 O(1)、首跳立即开关）或新 demo 玩法
 - **想法清单**：重叠命中 z 排序、AOE 圈视觉预览、collide_with_areas 开关、
   ge_damage_50.tres 死资产待删
 - 环境备忘：同会话 4

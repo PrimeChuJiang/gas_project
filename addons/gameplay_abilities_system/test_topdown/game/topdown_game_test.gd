@@ -31,6 +31,7 @@ func run_all() -> void:
 	await _run_presentation_smoke()
 	await _run_smite_regression()
 	await _run_combo_regression()
+	await _run_berserk_regression()
 	print("=== 回归结束：%s（通过 %d / 失败 %d）===" % ["ALL PASS" if is_pass() else "HAS FAILURE", _pass_count, _fail_count])
 
 func _timer(seconds: float) -> void:
@@ -271,18 +272,43 @@ func _run_smite_regression() -> void:
 	_check(sg.player.try_smite(actor), "天罚-01 右键激活落雷能力")
 	_check(smite.is_active and smite.wait_task != null and smite.wait_task.is_running, "天罚-02 瞄准态：Task 运行中")
 	_check(actor.select_area(victim_a.pos * 2.0, radius_px), "天罚-03 瞄准圈住目标")
-	_check(smite.wait_task.confirm_selection(), "天罚-04 左键确认落雷")
-	_check(not smite.is_active, "天罚-05 落雷后能力结束")
+	_check(smite.wait_task.confirm_selection(), "天罚-04 左键确认（进入前摇）")
+	_check(smite.notify_task != null and smite.notify_task.is_running, "天罚-05 前摇：WaitAnimNotify 等待命中帧")
+	_check(smite.is_active, "天罚-06 前摇中能力未结束")
+	_check(is_equal_approx(victim_a.get_attr(&"Health"), a_hp0), "天罚-07 前摇中未结算伤害")
 	var a_expected := maxf(1.0, attack * 1.8 - victim_a.get_attr(&"Defense"))
-	_check(is_equal_approx(victim_a.get_attr(&"Health"), a_hp0 - a_expected), "天罚-06 公式伤害 max(1, 攻×1.8−防)")
+	sg.emit_signal(&"anim_notify", &"smite_strike")
+	_check(not smite.is_active, "天罚-08 命中帧通知 → 能力结束")
+	_check(is_equal_approx(victim_a.get_attr(&"Health"), a_hp0 - a_expected), "天罚-09 公式伤害 max(1, 攻×1.8−防)")
 
-	_check(sg.player.try_smite(actor), "天罚-07 再次激活")
-	_check(not actor.select_area(Vector2(1600.0, 700.0), radius_px), "天罚-08 瞄准远处空地返回 false（选择器清空）")
-	_check(not smite.wait_task.confirm_selection(), "天罚-09 空圈确认被拒（fail-closed）")
-	_check(smite.is_active and smite.wait_task.is_running, "天罚-10 拒绝后能力继续等待")
+	_check(sg.player.try_smite(actor), "天罚-10 再次激活")
+	_check(actor.select_area(victim_a.pos * 2.0, radius_px), "天罚-11 圈住目标")
+	_check(smite.wait_task.confirm_selection(), "天罚-12 确认（进入前摇）")
+	var hp_before_mismatch := victim_a.get_attr(&"Health")
+	sg.emit_signal(&"anim_notify", &"wrong_notify")
+	_check(smite.is_active and smite.notify_task != null and smite.notify_task.is_running, "天罚-13 通知名不匹配：前摇继续")
+	_check(is_equal_approx(victim_a.get_attr(&"Health"), hp_before_mismatch), "天罚-14 不匹配通知不结算")
+	sg.player.asc.cancel_ability(smite)
+	_check(not smite.is_active, "天罚-15 取消前摇（不匹配段收尾）")
+
+	_check(sg.player.try_smite(actor), "天罚-16 再次激活")
+	_check(not actor.select_area(Vector2(1600.0, 700.0), radius_px), "天罚-17 瞄准远处空地返回 false（选择器清空）")
+	_check(not smite.wait_task.confirm_selection(), "天罚-18 空圈确认被拒（fail-closed）")
+	_check(smite.is_active and smite.wait_task.is_running, "天罚-19 拒绝后能力继续等待")
 	smite.wait_task.cancel_selection()
-	_check(not smite.is_active, "天罚-11 右键取消后能力结束")
-	_check(is_equal_approx(victim_a.get_attr(&"Health"), a_hp0 - a_expected), "天罚-12 取消不造成伤害")
+	_check(not smite.is_active, "天罚-20 右键取消后能力结束")
+	_check(is_equal_approx(victim_a.get_attr(&"Health"), hp_before_mismatch), "天罚-21 取消不造成伤害")
+
+	var hp_before_interrupt := victim_a.get_attr(&"Health")
+	_check(sg.player.try_smite(actor), "天罚-22 激活")
+	_check(actor.select_area(victim_a.pos * 2.0, radius_px), "天罚-23 圈住目标")
+	_check(smite.wait_task.confirm_selection(), "天罚-24 确认（进入前摇）")
+	_check(smite.is_active and smite.notify_task.is_running, "天罚-25 前摇中")
+	sg.player.asc.cancel_ability(smite)
+	_check(not smite.is_active, "天罚-26 前摇被打断 → 能力结束")
+	_check(is_equal_approx(victim_a.get_attr(&"Health"), hp_before_interrupt), "天罚-27 打断不结算伤害")
+	sg.emit_signal(&"anim_notify", &"smite_strike")
+	_check(is_equal_approx(victim_a.get_attr(&"Health"), hp_before_interrupt), "天罚-28 打断后通知无人听（连接已断）")
 
 	victim_a.attr_set.apply_base_value_change(&"Health", 9999.0)
 	victim_c.attr_set.apply_base_value_change(&"Health", 9999.0)
@@ -293,14 +319,15 @@ func _run_smite_regression() -> void:
 	var a2_hp0 := victim_a.get_attr(&"Health")
 	var c_hp0 := victim_c.get_attr(&"Health")
 	var mid := (victim_a.pos + victim_c.pos) * 0.5 * 2.0
-	_check(sg.player.try_smite(actor), "天罚-13 多目标激活")
-	_check(actor.select_area(mid, radius_px), "天罚-14 中间圈住两只")
-	_check(smite.wait_task.confirm_selection(), "天罚-15 确认落雷")
+	_check(sg.player.try_smite(actor), "天罚-29 多目标激活")
+	_check(actor.select_area(mid, radius_px), "天罚-30 中间圈住两只")
+	_check(smite.wait_task.confirm_selection(), "天罚-31 确认（进入前摇）")
 	var a_expected2 := maxf(1.0, attack * 1.8 - victim_a.get_attr(&"Defense"))
 	var c_expected := maxf(1.0, attack * 1.8 - victim_c.get_attr(&"Defense"))
-	_check(is_equal_approx(victim_a.get_attr(&"Health"), a2_hp0 - a_expected2), "天罚-16 目标A 满血复战后受公式伤害")
-	_check(is_equal_approx(victim_c.get_attr(&"Health"), c_hp0 - c_expected), "天罚-17 目标C 受公式伤害")
-	_check(not smite.is_active, "天罚-18 能力结束")
+	sg.emit_signal(&"anim_notify", &"smite_strike")
+	_check(not smite.is_active, "天罚-32 命中帧通知 → 结算")
+	_check(is_equal_approx(victim_a.get_attr(&"Health"), a2_hp0 - a_expected2), "天罚-33 目标A 满血复战后受公式伤害")
+	_check(is_equal_approx(victim_c.get_attr(&"Health"), c_hp0 - c_expected), "天罚-34 目标C 受公式伤害")
 	sg._running = true
 
 ## ---------------- 连击回归（WaitInput：攻击后 0.6s 窗口内再按攻击键 → 强化斩击） ----------------
@@ -347,3 +374,68 @@ func _run_combo_regression() -> void:
 
 	g.queue_free()
 	await _timer(0.1)
+
+## ---------------- 狂暴回归（互斥矩阵：block/cancel abilities with tags） ----------------
+
+func _run_berserk_regression() -> void:
+	print("=== 狂暴互斥回归 ===")
+	var scene := get_parent() as Node
+	var sg: TopdownGame = scene.get("game")
+	if sg == null or sg.monsters.is_empty():
+		_check(false, "狂暴-00 场景 game 可用")
+		return
+	var smite: GAPlayerSmite = sg.player.smite_ability
+	var actor := scene.get("_smite_target_actor") as GASAbilityTargetActor2D
+	if smite == null or actor == null:
+		_check(false, "狂暴-00 能力与选择器已装配")
+		return
+	sg._running = false
+	sg._respawn_queue.clear()
+	sg.player.attr_set.apply_base_value_change(&"Health", 9999.0)
+	var victims: Array[TopdownMonster] = []
+	for m in sg.monsters:
+		if m.is_alive() and scene.get("_entity_sprites").has(m) and victims.size() < 1:
+			victims.append(m)
+	if victims.is_empty():
+		_check(false, "狂暴-00 找到带物理身份证的活怪")
+		return
+	var victim: TopdownMonster = victims[0]
+	victim.pos = Vector2(64.0, 64.0)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var radius_px := TopdownGame.SMITE_RADIUS * 2.0
+	var attack := sg.player.get_attr(&"Attack")
+	var berserk_tag := GameplayTags.request_gameplay_tag(&"Ability.Berserk")
+
+	_check(sg.player.try_berserk(), "狂暴-01 激活狂暴")
+	_check(is_equal_approx(sg.player.get_attr(&"Attack"), attack * 2.0), "狂暴-02 狂暴中攻击力 ×2（MULTIPLY 1.0）")
+	_check(sg.player.asc.has_tag(berserk_tag), "狂暴-03 狂暴 GE 授予 Ability.Berserk tag")
+	_check(not sg.player.try_smite(actor), "狂暴-04 狂暴中落雷被拒（block_abilities_with_tags）")
+	var hp_berserk := victim.get_attr(&"Health")
+	_check(sg.player.try_attack(), "狂暴-05 狂暴中普攻正常（互斥不误伤）")
+	_check(not sg.player.try_smite(actor), "狂暴-06 狂暴中落雷仍被拒")
+
+	var berserk_query := FGameplayTagContainer.new()
+	berserk_query.add_tag(berserk_tag)
+	sg.player.asc.remove_active_effects_with_tags(berserk_query)
+	_check(is_equal_approx(sg.player.get_attr(&"Attack"), attack), "狂暴-07 移除狂暴后攻击力回落")
+
+	var victim_hp0 := victim.get_attr(&"Health")
+	_check(sg.player.try_smite(actor), "狂暴-08 落雷恢复可激活")
+	_check(actor.select_area(victim.pos * 2.0, radius_px), "狂暴-09 圈住目标")
+	_check(smite.wait_task.confirm_selection(), "狂暴-10 确认（进入前摇）")
+	_check(smite.is_active and smite.notify_task.is_running, "狂暴-11 落雷前摇中")
+	_check(sg.player.try_berserk(), "狂暴-12 前摇中狂暴激活")
+	_check(not smite.is_active, "狂暴-13 落雷被打断（cancel_abilities_with_tags）")
+	_check(is_equal_approx(victim.get_attr(&"Health"), victim_hp0), "狂暴-14 打断无伤害")
+
+	await _timer(TopdownGame.BERSERK_DURATION + 0.2)
+	_check(is_equal_approx(sg.player.get_attr(&"Attack"), attack), "狂暴-15 狂暴 3s 到期攻击力回落")
+	_check(not sg.player.asc.has_tag(berserk_tag), "狂暴-16 到期 tag 撤销")
+	_check(sg.player.try_smite(actor), "狂暴-17 到期后落雷恢复可激活")
+	_check(sg.player.try_berserk(), "狂暴-18 狂暴再次可用")
+	_check(not sg.player.try_smite(actor), "狂暴-19 狂暴中落雷再次被拒")
+	var berserk_query2 := FGameplayTagContainer.new()
+	berserk_query2.add_tag(berserk_tag)
+	sg.player.asc.remove_active_effects_with_tags(berserk_query2)
+	sg._running = true

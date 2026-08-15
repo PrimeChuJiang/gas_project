@@ -17,6 +17,12 @@ signal ability_ended(ability: GASGameplayAbility, was_cancelled: bool)
 # 能力激活中能力被打断的标签
 @export var cancel_with_tags: FGameplayTagContainer = FGameplayTagContainer.new() 
 
+# 能力激活期间会阻挡的能力tag
+@export var block_abilities_with_tags: FGameplayTagContainer = FGameplayTagContainer.new() 
+
+# 能力激活时打断别人的tag列表
+@export var cancel_abilities_with_tags: FGameplayTagContainer = FGameplayTagContainer.new() 
+
 # 消耗GE(例如扣除蓝量)， 激活时施加给自身
 @export var cost_ge: GASGameplayEffect
 

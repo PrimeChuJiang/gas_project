@@ -326,6 +326,12 @@ func _input(event: InputEvent) -> void:
 				if not smite.wait_task.confirm_selection():
 					_on_message("[color=#ffcc66]落雷失败：圈内没有目标[/color]")
 
+func _unhandled_input(event: InputEvent) -> void:
+	if not game or not game.player or _game_over_shown:
+		return
+	if event is InputEventKey and event.pressed and event.keycode == KEY_Q:
+		game.player.try_berserk()
+
 ## ---------------- 实体渲染 ----------------
 
 func _sync_all_sprites() -> void:
@@ -534,7 +540,7 @@ func _build_hud() -> void:
 	log_panel.add_child(log_label)
 
 	hint_label = Label.new()
-	hint_label.text = "WASD 移动 · 空格/左键 攻击 · 右键 落雷（圈选 AOE） · E 开箱 · R 重开"
+	hint_label.text = "WASD 移动 · 空格/左键 攻击 · 右键 落雷（圈选 AOE） · Q 狂暴 · E 开箱 · R 重开"
 	hint_label.add_theme_color_override("font_color", Color(0.55, 0.6, 0.68, 1))
 	hint_label.add_theme_font_size_override("font_size", 12)
 	vbox.add_child(hint_label)
@@ -579,6 +585,7 @@ func _connect_game_signals() -> void:
 	game.monster_respawned.connect(_on_monster_respawned)
 	game.chest_opened.connect(_on_chest_opened)
 	game.game_over.connect(_on_game_over)
+	game.smite_casting.connect(_on_smite_casting)
 	game.player.gear_changed.connect(_on_gear_changed)
 
 func _on_message(text: String) -> void:
@@ -664,6 +671,21 @@ func _on_game_over() -> void:
 	_shake_camera(8.0, 0.4)
 	_play_sfx("gameover")
 	_on_message("[color=#ff7777]你倒下了……按 R 重开[/color]")
+
+## 落雷前摇：玩家脚下法阵渐显 0.4s，到期发命中帧通知（逻辑层 WaitAnimNotify 结算）。
+## 前摇被打断时通知照发但无人听（Task 已退场）——"表现空白合法"的镜像变体。
+func _on_smite_casting() -> void:
+	var sigil := Polygon2D.new()
+	var pts := PackedVector2Array()
+	for i in 32:
+		var a := TAU * float(i) / 32.0
+		pts.append(Vector2(cos(a), sin(a)) * 26.0)
+	sigil.polygon = pts
+	sigil.color = Color(1.0, 0.8, 0.35, 0.0)
+	sigil.position = _world_pos(game.player)
+	sigil.z_index = 55
+	_vfx_layer.add_child(sigil)
+	_vfx.append({"kind": "smite_cast", "node": sigil, "life": 0.4, "max": 0.4, "notified": false})
 
 func _show_center_banner(text: String) -> void:
 	_center_banner.text = text
@@ -919,6 +941,10 @@ func _tick_vfx(delta: float) -> void:
 				var rsprite: Sprite2D = v.sprite
 				rsprite.modulate = Color(1.0, 1.0, 1.0, 1.0 - t)
 				rsprite.scale = Vector2.ONE * lerpf(1.0, 0.3, t) * WORLD_SCALE
+			"smite_cast":
+				var sigil: Polygon2D = v.node
+				sigil.color.a = (1.0 - t) * 0.55
+				sigil.rotation += delta * 3.0
 			"banner":
 				var banner: Label = v.node
 				if t > 0.6:
@@ -933,6 +959,12 @@ func _tick_vfx(delta: float) -> void:
 				_vfx.remove_at(i)
 			elif v.kind == "respawn":
 				# respawn 的 sprite 由实体渲染系统管理（_entity_sprites），此处只摘条目不删节点
+				_vfx.remove_at(i)
+			elif v.kind == "smite_cast":
+				if not v.notified:
+					v.notified = true
+					game.emit_signal(&"anim_notify", &"smite_strike")
+				v.node.queue_free()
 				_vfx.remove_at(i)
 			else:
 				v.node.queue_free()

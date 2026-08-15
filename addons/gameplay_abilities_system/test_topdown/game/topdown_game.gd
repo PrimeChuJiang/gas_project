@@ -11,6 +11,8 @@ signal monster_died(monster: TopdownMonster)
 signal monster_respawned(monster: TopdownMonster)
 signal chest_opened(chest: TopdownChest, loot_name: String)
 signal game_over()
+signal smite_casting()
+signal anim_notify(notify_name: StringName)
 
 ## 地图：'#'=墙 '.'=地板 'P'=玩家出生 'M'=怪物出生 'C'=宝箱
 const MAP: Array[String] = [
@@ -41,6 +43,9 @@ const COMBO_ARC_DEG: float = 50.0
 
 const TAG_ATTACK := &"Ability.Attack"
 const TAG_ATTACK_COOLDOWN := &"Ability.Attack.Cooldown"
+const TAG_SMITE := &"Ability.Spell.Smite"
+const TAG_BERSERK := &"Ability.Berserk"
+const BERSERK_DURATION: float = 3.0
 
 var player: TopdownPlayer
 var monsters: Array[TopdownMonster] = []
@@ -59,6 +64,7 @@ var _cooldown_ge: GASGameplayEffect
 var _xp_ge: GASGameplayEffect
 var _heal_potion_ge: GASGameplayEffect
 var _xp_potion_ge: GASGameplayEffect
+var berserk_ge: GASGameplayEffect = null
 var _gear_catalog: Dictionary = {}
 var _respawn_queue: Array[Dictionary] = []  # {kind, tile, timer}
 var _rng := RandomNumberGenerator.new()
@@ -152,13 +158,42 @@ func _spawn_world() -> void:
 	ability.ability_tags = ability_tags
 	var smite := GAPlayerSmite.new()
 	smite.game = self
+	var smite_tags := FGameplayTagContainer.new()
+	smite_tags.add_tag(GameplayTags.request_gameplay_tag(TAG_SMITE))
+	smite.ability_tags = smite_tags
 	player.smite_ability = smite
 	var combo := GAPlayerCombo.new()
 	combo.game = self
 	player.combo_ability = combo
+	var berserk := GAPlayerBerserk.new()
+	berserk.game = self
+	var berserk_tags := FGameplayTagContainer.new()
+	berserk_tags.add_tag(GameplayTags.request_gameplay_tag(TAG_BERSERK))
+	berserk.ability_tags = berserk_tags
+	var block_tags := FGameplayTagContainer.new()
+	block_tags.add_tag(GameplayTags.request_gameplay_tag(TAG_SMITE))
+	berserk.block_abilities_with_tags = block_tags
+	var cancel_tags := FGameplayTagContainer.new()
+	cancel_tags.add_tag(GameplayTags.request_gameplay_tag(TAG_SMITE))
+	berserk.cancel_abilities_with_tags = cancel_tags
+	player.berserk_ability = berserk
 	player.setup_player(hero_attrs, ability)
 	player.asc.give_ability(smite)
 	player.asc.give_ability(combo)
+	player.asc.give_ability(berserk)
+	berserk_ge = GASGameplayEffect.new()
+	berserk_ge.duration_policy = GASEnums.DurationPolicy.DURATION
+	berserk_ge.duration = BERSERK_DURATION
+	var berserk_granted := FGameplayTagContainer.new()
+	berserk_granted.add_tag(GameplayTags.request_gameplay_tag(TAG_BERSERK))
+	berserk_ge.granted_tag = berserk_granted
+	var berserk_mod := GEModifier.new()
+	berserk_mod.attr_name = &"Attack"
+	berserk_mod.op = GASEnums.ModifierOp.MULTIPLY
+	var berserk_mag := GASModifierMagnitudeScalableFloat.new()
+	berserk_mag.value = 1.0
+	berserk_mod.magnitude = berserk_mag
+	berserk_ge.modifiers.append(berserk_mod)
 	player.pos = _tile_to_world(_player_spawn)
 	player.died.connect(_on_player_died)
 	player.attr_set.leveled_up.connect(func(level: int) -> void:
@@ -443,6 +478,9 @@ func do_smite(targets: Array[TopdownEntity], center: Vector2) -> void:
 	attack_performed.emit(form, player)
 	blast_effect.emit(center, SMITE_RADIUS)
 	message.emit("落雷！命中 %d 个敌人" % targets.size())
+
+func start_smite_casting() -> void:
+	smite_casting.emit()
 
 func _on_monster_died(entity: TopdownEntity) -> void:
 	var monster := entity as TopdownMonster

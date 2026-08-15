@@ -1745,3 +1745,118 @@ end_ability 取消链路）。
 
 - **WaitAnimNotify**（等动画通知）——动画与逻辑时序解耦；
 - 之后第三梯队：Ability 间 tag 关系（block / cancel abilities with tags）。
+---
+
+## 24. 复盘：更多 AbilityTask——WaitAnimNotify（等动画通知，2026-08-14 完成）
+
+### 问题本质
+
+动画与逻辑的时序解耦：逻辑层不知道动画多长，动画不知道逻辑怎么算。
+UE 的答案：动画蒙太奇上挂 notify 帧，`UAbilityTask_WaitAnimNotify` 等它——
+**动画发通知，能力等通知，双方只认一个名字**。本项目没有动画系统，
+用"game 广播 + 表现层在命中帧 emit"等价实现。
+
+### GASAbilityTaskWaitAnimNotify（框架，用户实现）
+
+- **API**：`create(ability, notify_source, notify_signal, notify_name)`——等
+  notify_source 上广播的信号，**名称匹配才 end_task(false)**，不匹配静默忽略
+  （动画帧很多，只认自己的）；
+- **动态信号连接**：`notify_source.connect(notify_signal, _on_notify)`——GDScript
+  信号名可动态传；节点 queue_free 自动断连，无泄漏；无 `_process`，纯事件驱动；
+- **踩坑（本课最大教训）：CONNECT_ONE_SHOT 语义陷阱**。第一版用 ONE_SHOT 防
+  "end_task 到 queue_free 窗口期重复触发"——但 ONE_SHOT 按**信号触发次数**断连，
+  不是按**名称匹配**断连：wrong_notify 触发一次就把连接消费掉，真正的 smite_strike
+  再也收不到（测试铁证：天罚-15 卡死、能力永挂）。正确姿势：
+  **普通连接 + `is_running` 守卫**（end_task 后 is_running=false，重复触发被拦）——
+  守卫按语义拦截，ONE_SHOT 按触发拦截，语义粒度不同；
+- **连接时机**：`connect` 在 `super.activate()` 之前——同帧早发的信号不漏
+  （思考题 2 的正确答案）。
+
+### 落雷前摇场景（demo 侧，AI 代笔）
+
+确认目标后不再立即结算：`game.start_smite_casting()`（表现层玩家脚下法阵渐显
+0.4s）→ `WaitAnimNotify.create(self, game, &"anim_notify", &"smite_strike")` →
+命中帧表现层 emit → `do_smite` → 结束。
+
+- **快照离手即定（第五例）**：targets/center 在 confirm 时算好存成员变量——
+  前摇 0.4s 里怪物在动，结算必须用确认时刻的目标（TargetData 买定离手之上
+  再加一层快照）；
+- **前摇可被打断**：打断 → `end_task(true)` → 无伤害；打断后通知照发但无人听
+  （Task 已退场，连接已断）——"表现空白合法"的镜像变体："通知没人听也合法"；
+- **法阵视觉**：走 `_vfx` 机制（Polygon2D 渐显旋转，0.4s 到期发通知 + 自毁），
+  与现有爆炸/火花/飘字同构，零新机制。
+
+### 测试侧（天罚测试重写 18 → 34 条）
+
+- 前摇中无伤害 / 命中帧通知结算 / 通知名不匹配不触发 / 前摇打断无伤害 /
+  打断后通知无人听 / 多目标全链路；
+- **踩坑**：victim_a（骷髅 70hp）吃两次 58 伤害死亡 → Health 钳 0 → 后续断言
+  全崩——不匹配段收尾改为"取消前摇"（正确通知的结算已由首段验证），受害者
+  只伤一次。
+
+### 验收记录
+
+| 范围 | 结果 |
+|---|---|
+| topdown 回归（天罚 34 条重写） | 92/0 全绿 |
+| 桌游回归 | 198/0 无回归 |
+| UI 检查 | issues=0 |
+
+### 下一课排队
+
+第三梯队：**Ability 间 tag 关系**（block / cancel abilities with tags）——
+技能互斥/抢占矩阵，第 10 节 push 式打断的补全。
+---
+
+## 25. 复盘：Ability 间 tag 关系——互斥矩阵（block / cancel abilities with tags，2026-08-14 完成）
+
+### 问题本质
+
+第三梯队最后一块：技能之间怎么互斥/抢占。第 10 节的 push 式打断（cancel_with_tags）
+是"状态变化打断我"，本课补全"能力挡能力"的矩阵。UE 语义对照（tranek 4.6.9 表格
+为证）：`BlockAbilitiesWithTag`（我激活期间，带这些 AbilityTags 的其他能力无法激活）/
+`CancelAbilitiesWithTag`（我激活时，取消带这些 AbilityTags 的其他能力）——
+**查的是别的能力的 Ability Tags，不是 ASC 状态**（后者是 ActivationBlockedTags /
+AbilitiesToCancelOnTag 的活，早已实现）。
+
+### 框架（用户实现，两字段 + 两检查点）
+
+- `gameplay_ability.gd` 加 `block_abilities_with_tags` / `cancel_abilities_with_tags`
+  两容器字段；
+- `try_activate_ability` 改四段式：`can_activate` → `_is_blocked_by_active`（active
+  能力的 block 列表 has_any 新能力 ability_tags，层级匹配）→ `_cancel_abilities_matched`
+  （新能力 cancel 列表 has_any active 能力 ability_tags，duplicate 快照遍历）→ 激活；
+- **审查抓出的方向错**：第一版两个 helper 字段张冠李戴（block 查了新能力的 cancel
+  列表、cancel 查了对手的 cancel 列表）——记法：`has_any` 里**容器是我的列表，
+  参数是对方的身份 tag**；本课语义讨论（四字段区别）后遗症，测试铁证（狂暴-04/-19）；
+- 注释假口供修正：cancel_abilities_with_tags 首版注释"会被打断"语义反了。
+
+### 狂暴场景（demo 侧，AI 代笔）
+
+狂暴（Q）：3s 攻击力 ×2。互斥都配在狂暴身上（用户否掉"狂暴 block 落雷 + 落雷
+cancel 狂暴"的自相矛盾方案——那对关系永远只有一边能成立）：**狂暴激活时打断前摇中
+的落雷**（cancel）+ **狂暴激活期间阻塞落雷**（block）——各占各的触发窗口，自洽。
+
+- **设计坑（本课最大）**：狂暴首版"apply GE 后立即 end_ability"——能力瞬时结束，
+  "激活期间"窗口不存在，`_active_abilities` 里没人挡，block 永久失效。
+  修法：**buff 类能力在整个持续期间保持激活**（UE 同款：能力活着 = buff 生效中），
+  结束时机 = `Ability.Berserk` tag 消失（GE 到期/被移除都会撤 tag，监听
+  `gameplay_tag_changed` 一条路径全覆盖）；
+- **RefCounted 回引泄漏**（补课 2026-08-09 教训第二例）：能力连接 ASC 信号后不
+  disconnect，ASC 持引用、能力永不释放——覆写 `end_ability` 统一断连（is_connected
+  防重复）；
+- 狂暴 GE：DURATION 3s + granted_tag `Ability.Berserk` + MULTIPLY 1.0（= ×2，1+m
+  语义）；新 tag 入配置：`Ability.Berserk` / `Ability.Spell.Smite`；
+- 落雷补上 `ability_tags = [Ability.Spell.Smite]`（此前落雷没有能力身份 tag——
+  互斥矩阵的前提是"对方有身份可查"）。
+
+### 验收记录
+
+| 范围 | 结果 |
+|---|---|
+| topdown 回归（狂暴 19 条） | 92 → **111/0** |
+| 桌游回归 | 198/0 无回归 |
+| UI 检查 | issues=0 |
+
+狂暴-01~19：激活 ×2 / block 拒绝 / 普攻不误伤 / 移除回落 / 前摇中狂暴打断落雷
+（cancel）/ 打断无伤害 / 3s 到期回落 / 到期后恢复 / 重复狂暴拒绝。

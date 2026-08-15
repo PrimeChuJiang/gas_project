@@ -179,11 +179,14 @@ func give_ability(ability: GASGameplayAbility) -> bool:
 
 # 尝试调用Ability
 func try_activate_ability(ability: GASGameplayAbility) -> bool:
-	if ability.can_activate():
-		_active_abilities.append(ability)
-		ability.activate()
-		return true
-	return false
+	if not ability.can_activate():
+		return false
+	if _is_blocked_by_active(ability):
+		return false
+	_cancel_abilities_matched(ability)
+	_active_abilities.append(ability)
+	ability.activate()
+	return true
 
 # 取消Ability
 func cancel_ability(ability: GASGameplayAbility):
@@ -420,3 +423,14 @@ func _make_cue_parameters(spec: GASEffectSpec) -> GASGameplayCueParameters:
 	params.instigator = spec.source_asc.avatar_actor if spec.source_asc else null
 	params.magnitude = spec.modifiers[0].get_magnitude() if not spec.modifiers.is_empty() else 0
 	return params
+
+func _is_blocked_by_active(ability: GASGameplayAbility) -> bool:
+	for activate_ability in _active_abilities:
+		if activate_ability.block_abilities_with_tags.has_any(ability.ability_tags):
+			return true
+	return false
+
+func _cancel_abilities_matched(ability: GASGameplayAbility) -> void:
+	for activate_ability in _active_abilities.duplicate():
+		if ability.cancel_abilities_with_tags.has_any(activate_ability.ability_tags):
+			activate_ability.end_ability(true)
