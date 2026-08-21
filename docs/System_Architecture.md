@@ -744,16 +744,24 @@ classDiagram
 ```mermaid
 stateDiagram-v2
     direction LR
-    state "已授予 · 闲置" as IDLE
-    state "激活中" as ACTIVE
+
+    state "闲置" as IDLE
+    state "施放中" as ACTIVE
     state "已结束" as ENDED
 
-    [*] --> IDLE: give_ability 装载（校验站）
-    IDLE --> ACTIVE: "try_activate_ability<br/>can_activate 五道检查全过"
-    ACTIVE --> ACTIVE: "commit_ability<br/>扣蓝 + 进冷却（蓄力完成后调用）"
-    ACTIVE --> ENDED: "end_ability(false)<br/>正常完成"
-    ACTIVE --> ENDED: "end_ability(true)<br/>被打断 / 取消"
-    ENDED --> IDLE: "冷却 tag 消失后可再次激活"
+    note right of ACTIVE
+        commit_ability（扣费 + 冷却）
+        可与 activate 分离：
+        蓄力中被打断 → end_ability(true)
+        → 不扣费、不进冷却
+    end note
+
+    [*] --> IDLE : give_ability 装载（校验站）
+    IDLE --> ACTIVE : try_activate_ability<br/>（can_activate 四查全过）
+    ACTIVE --> ACTIVE : commit_ability<br/>（扣费 + 冷却）
+    ACTIVE --> ENDED : end_ability(false)<br/>正常完成
+    ACTIVE --> ENDED : end_ability(true)<br/>打断 / 取消
+    ENDED --> IDLE : 冷却消失后<br/>可再次激活
 ```
 
 **关键纪律：所有能力路径的终点都必须是 `end_ability()`**（生命周期不变量）。
