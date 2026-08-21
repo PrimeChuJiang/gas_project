@@ -1292,14 +1292,19 @@ sequenceDiagram
 - ✅ magnitude 家族（ScalableFloat / AttributeBased / SetByCaller / SetByCaller×Attribute）
 - ✅ ExecutionCalculation + 双桶落账 + 依赖登记簿实时重算
 - ✅ Ability 生命周期 + CQS + push/pull 打断 + 互斥矩阵（block/cancel_abilities_with_tags）
-- ✅ Task 家族（Delay / WaitInput / WaitAnimNotify / WaitTargetData）
+- ✅ Task 家族（Delay / WaitInput / WaitAnimNotify / WaitTargetData / WaitGameplayEvent）
 - ✅ GameplayCue（邮局广播 + 凭票 Actor Cue + ASC 三时刻钩子）
 - ✅ TargetData（容器 + TargetActor 基类 + 2D 点选/AOE + WaitTargetData）
-- ✅ 测试场景 + F 键一键自动化回归（桌游 198 / topdown 111）
+- ✅ GE 授予能力 + 被动（引用计数回收 + 授予即激活；圣光护符实战）
+- ✅ 事件驱动激活（GASGameplayEventData + 事件 tag 激活 + 广播等待端；复仇/反击实战）
+- ✅ Loose Tags（手动 tag 薄壳 API，与 GE 授予混账引用计数）
+- ✅ Custom Application Requirement（can_apply 虚函数 + 双门禁；等级门槛实战）
+- ✅ 优化（tag 祖先 O(1) 反向索引 + 首跳立即开关）
+- ✅ 测试场景 + F 键一键自动化回归（桌游 198 / topdown 184）
 
-**机制级缺口**（下一步开发主线，见 `GAS_Documentation.md` 13.4）：
-GE 授予能力、Modifier 级标签条件、Activation Owned Tags、自定义施加条件、
-被动能力钩子、若干小 API 补齐。
+**机制级缺口**（剩余可选小项，见 `GAS_Documentation.md` 13.4）：
+Modifier 级标签条件（source_tags/target_tags）、Activation Owned Tags、
+小 API 补齐（冷却剩余时长 / 批量取消 / get_active_abilities / GC 静默）。
 
 **明确不做**：网络复制与客户端预测（单机项目；Godot 网络模型与 UE 差异过大）。
 

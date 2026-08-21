@@ -767,29 +767,37 @@ addons/gameplay_abilities_system/
 | 10 | GameplayCue | ✅ 完成 | 第 21 节：事件流（邮局广播 + 小票 + ASC 三时刻钩子）、凭票制 Actor Cue（工厂 + add/remove + 存在性计数）、周期 GE 每跳 EXECUTED、手动 API 全部落地；WHILE_ACTIVE 有意不做（持续表现由凭票节点自身 _process 承担）；桌游演示：眩晕星星（凭票工厂）+ 伤害飘字（GE 自动 / 手动 API 双链） |
 | 11 | TargetData | ✅ 完成 | TargetData 容器 + TargetActor 基类（缓存 / confirm 买定离手 / cancel / filter 注入）+ 2D 子类（点选 / 范围多选 / 实体过滤 / z 排序）+ WaitTargetData Task；demo2 落雷（AOE 预览圈）与连击（点选目标）全链路实战 |
 | 12 | 能力互斥矩阵 | ✅ 完成 | `block_abilities_with_tags` / `cancel_abilities_with_tags`（try_activate_ability 四段式：can → block 检查 → 批量打断 → 入册激活）；狂暴技能实战（buff 保持激活才有 block 窗口） |
-| 13 | 网络同步 / 预测 | ❌ 明确不做 | 单机项目，Godot 网络模型与 UE 差异过大 |
+| 13 | GE 授予能力 + 被动 | ✅ 完成 | `granted_abilities` + `activate_abilities_on_grant`（引用计数 `_ability_grant_counts`：先给后记账 / 归零才移除；entry 凭据 + `_cleanup_effect` 唯一漏斗回收；INSTANT fail-closed）；圣光护符实战（授予即激活被动，Defense +5 自挂自摘） |
+| 14 | 事件驱动激活 | ✅ 完成 | `GASGameplayEventData` 小票 + `activation_event_tags` / `last_event_data`（ASC 注入零破坏）+ `send_gameplay_event_to_actor` → 层级匹配激活；复仇技能实战（受击触发，与 GE 授予组合拳） |
+| 15 | Loose Tags | ✅ 完成 | `add_loose_tag` / `remove_loose_tag` 薄壳公开方法（与 GE 授予的 tag 混同一本 `_tag_counts` 账，引用计数天然正确）；玩家死亡挂 `State.Dead` |
+| 16 | WaitGameplayEvent Task | ✅ 完成 | ASC `gameplay_event_received` 广播信号（激活端 + 等待端并行）+ Task（等事件带数据 + 超时，`get_event_data` 交付）；反击技能实战（受击反击攻击者） |
+| 17 | Custom Application Requirement | ✅ 完成 | `GASCustomApplicationRequirement` 基类（`can_apply(spec)` 虚函数，fail-open）+ GE 数组字段 + apply 入口双门禁；`GASLevelRequirement` 实战（护符等级门槛，读属性） |
+| 18 | tag 祖先 O(1) / 首跳立即开关 | ✅ 完成 | `_tag_ancestor_counts` 反向祖先索引（UE TagMap 同款，has_tag 查表 O(1)）+ GE `execute_periodic_effect_on_application`（apply 即跳第一次） |
+| 19 | 网络同步 / 预测 | ❌ 明确不做 | 单机项目，Godot 网络模型与 UE 差异过大 |
 
 > 除了上表，还额外完成了：GameplayTags 插件（享元 + 多叉树 + 引用计数）、
-> 测试场景 + F 键一键自动化回归（桌游 198 项 / topdown 111 项全绿）。
-> DEVLOG.md 记录了完整开发历程。
+> 测试场景 + F 键一键自动化回归（桌游 198 项 / topdown 184 项全绿）、
+> 表现层动画通知（`WaitAnimNotify` + 落雷法阵前摇，动画与逻辑时序解耦）。
+> DEVLOG.md 记录了完整开发历程（第 1-31 节）。
 
-### 13.4 机制级缺口清单（下一步开发重点）
+### 13.4 机制级缺口清单（2026-08 更新：核心缺口已全部关账）
 
 对照 tranek/GASDocumentation 全文核查（2026-08）：框架级核心机制已全部关账，
-剩余**机制级缺口**如下——与"设定/内容级"（用既有积木搭新 GE/新能力）不同，
-这些需要补字段或管道，是后续开发的主线：
+原清单 1-6 中 **1（GE 授予）/ 4（Custom Application Requirement）/ 5（被动钩子）已实现**，
+剩余可选小项如下——与"设定/内容级"（用既有积木搭新 GE/新能力）不同，
+以下需要补字段或管道，按需推进：
 
 | # | 缺口 | tranek 章节 | 当前状态 | 实现思路 |
 | --- | --- | --- | --- | --- |
-| 1 | GE 授予能力 | 4.5.6 Granted Abilities | GE 无 granted_abilities 字段 | GE 增加能力授予列表（能力 + 等级 + 输入绑定）+ Removal Policy（移除时：立即取消 / 等自然结束 / 保留）；挂账时 give、移除时按策略处理 |
+| 1 | GE 授予能力 | 4.5.6 Granted Abilities | ✅ 已关账（13.3-13） | 能力 + 引用计数回收 + INSTANT fail-closed；Removal Policy（立即取消/等自然结束/保留）未细分，当前统一"立即取消" |
 | 2 | Modifier 级标签条件 | 4.5.4.2 | `GEModifier` 仅 attr_name/op/magnitude 三字段 | 增加 source_tags / target_tags（首次施加时判定，不参与后续周期检查） |
 | 3 | Activation Owned Tags | 4.6.9 | GA 无此字段 | GA 增加 activation_owned_tags；activate 时授予、end_ability 时撤销（可与 granted_tag 共用引用计数） |
-| 4 | Custom Application Requirement | 4.5.13 | 仅有标签版门禁 `GASGameplayTagRequirements` | 增加可写逻辑的施加条件扩展点（如"目标已有该 GE 则改时长"） |
-| 5 | 被动能力标准钩子 | 4.6.4.1 | 需手动 `give_ability` 后 `try_activate_ability` | `give_ability` 增加 auto_activate 标志（授予即激活，被动能力场景） |
-| 6 | 小 API 补齐 | 4.5.15.1 / 4.6.5 / 4.8.6 | 无公开查询/批量接口 | `get_active_effect_time_remaining`（冷却剩余时长）/ `cancel_abilities_with_tags` / `get_active_abilities` / `suppress_gameplay_cues`（GC 全局静默） |
+| 4 | Custom Application Requirement | 4.5.13 | ✅ 已关账（13.3-17） | `can_apply(spec)` 虚函数 + GE 数组 + apply 双门禁；实战：等级门槛 |
+| 5 | 被动能力标准钩子 | 4.6.4.1 | ✅ 已关账（13.3-13） | `activate_abilities_on_grant`（授予即激活）+ 能力自管生命周期（狂暴/圣光模式） |
+| 6 | 小 API 补齐 | 4.5.15.1 / 4.6.5 / 4.8.6 | 部分已有 | `get_active_effect_time_remaining`（冷却剩余时长）/ `cancel_abilities_with_tags`（批量取消）/ `get_active_abilities` / `suppress_gameplay_cues`（GC 全局静默）——按需补 |
 
 > 设定/内容级内容（新能力 Sprint/ADS/暴击/吸血、新 Task WaitAttributeChange/WaitGameplayTag/WaitOverlap、
-> 便利类 GE Containers / Ability Sets 等）属于既有框架的丰富，建议等缺口 1-6 关账后再按需推进。
+> 便利类 GE Containers / Ability Sets 等）属于既有框架的丰富，按需推进。
 
 ---
 
