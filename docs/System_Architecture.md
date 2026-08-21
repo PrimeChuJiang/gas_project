@@ -930,14 +930,15 @@ GDScript 不支持泛型，基类无法提供通用的 `static create()` 来 new
 
 ```text
 GASAbilityTask（基类）
-├── GASAbilityTaskDelay            ← 所有"等 N 秒"的技能共用
-├── GASAbilityTaskWaitInput        ← 所有"等按键"的技能共用（连击窗口 / 超时）
-├── GASAbilityTaskWaitAnimNotify   ← 所有"等动画帧"的技能共用（动态信号连接 + 名称匹配）
-└── GASAbilityTaskWaitTargetData   ← 所有"等目标选择"的技能共用（注入 TargetActor）
+├── GASAbilityTaskDelay              ← 所有"等 N 秒"的技能共用（蓄力 / DoT 节奏）
+├── GASAbilityTaskWaitInput          ← 所有"等按键"的技能共用（连击窗口 / 超时）
+├── GASAbilityTaskWaitAnimNotify     ← 所有"等动画帧"的技能共用（动态信号连接 + 名称匹配）
+├── GASAbilityTaskWaitTargetData     ← 所有"等目标选择"的技能共用（注入 TargetActor）
+└── GASAbilityTaskWaitGameplayEvent  ← 所有"等事件带数据"的技能共用（事件 tag + 超时）
 ```
 
 大部分技能组合已有 Task 就行，跟搭积木一样——这就是 UE 的设计思想：
-`UAbilityTask` + 官方任务库。
+`UAbilityTask` + 官方任务库。每个 Task 的详细逻辑与用法见 7.6。
 
 ### 7.5 与 UE 对照
 
@@ -947,6 +948,152 @@ GASAbilityTask（基类）
 | 创建 | `UAbilityTask::NewAbilityTask` | 子类 `static create()` + 基类 `_spawn()` |
 | 完成回调 | `OnFinished` / `OnCancelled` Delegate | `task_finished` / `task_canceled` 信号 |
 | 生命周期 | 能力结束时由 GAS 统一 EndAbility | `end_ability` 倒序遍历取消 |
+
+### 7.6 各 Task 详解：逻辑与使用
+
+所有 Task 统一使用模式（两个信号二选一，`end_task(false)` = 成功 / `end_task(true)` = 取消）：
+
+```gdscript
+var task := GASAbilityTaskXxx.create(self, ...)   # 工厂：new + 设参数 + _spawn
+task.task_finished.connect(_on_success)           # 成功 → 能力继续
+task.task_canceled.connect(_on_cancel)            # 取消/超时/打断 → 能力善后
+# 能力被打断时 end_ability 自动遍历取消所有 Task（唯一漏斗，无需手动清理）
+```
+
+#### 7.6.1 GASAbilityTaskDelay —— 等 N 秒
+
+**逻辑**：`_process` 累计 `_timer`，到 `_duration` → `end_task(false)`。不可被打断之外的任何特殊逻辑。
+
+```gdscript
+static func create(ability: GASGameplayAbility, duration: float) -> GASAbilityTaskDelay
+```
+
+**使用**（火球蓄力 0.6s 后结算）：
+
+```gdscript
+func activate() -> void:
+    super.activate()
+    var task := GASAbilityTaskDelay.create(self, 0.6)
+    task.task_finished.connect(_on_charge_done)
+    task.task_canceled.connect(func(): end_ability(true))
+```
+
+**要点**：最朴素的 Task；"等待"里的计时器角色。被打断（眩晕）→ `task_canceled` → 不结算（桌游火球验证）。
+
+#### 7.6.2 GASAbilityTaskWaitInput —— 等按键（可超时）
+
+**逻辑**：`_process` 每帧轮询 `Input.is_action_just_pressed(input_action)`（**轮询而非 `_input` 事件**——headless 测试用 `Input.action_press` 可模拟）；按到 → `end_task(false)`；超时（`timeout > 0`）→ `end_task(true)`。
+
+```gdscript
+static func create(ability: GASGameplayAbility, input_action: StringName, timeout: float = -1.0) -> GASAbilityTaskWaitInput
+```
+
+**使用**（连击窗口：普攻后 0.6s 内再按攻击键）：
+
+```gdscript
+wait_task = GASAbilityTaskWaitInput.create(self, &"attack", 0.6)
+wait_task.task_finished.connect(_on_combo_input)   # 按到 → 强化斩击
+wait_task.task_canceled.connect(_on_window_closed) # 超时 → 落空
+```
+
+**要点**：
+- **捕获即退场**：`is_action_just_pressed` 在动作保持按下时连续多帧 true——但按到即 `end_task`，多帧 true 无副作用；
+- **场景层按键消费**：WaitInput 等待期间，场景层普攻分支要跳过（`if not combo_ability.is_active: try_attack()`），否则一次按键双重效果；
+- demo：demo2 连击（普攻后窗口内再按 → 强化斩击 ×1.5）。
+
+#### 7.6.3 GASAbilityTaskWaitAnimNotify —— 等动画通知
+
+**逻辑**：`notify_source.connect(notify_signal, _on_notify)` 动态信号连接（GDScript 信号名可动态传）；收到信号回调，**名称匹配**才 `end_task(false)`，不匹配静默忽略（动画帧很多，只认自己的）；`is_running` 守卫防重复触发（**不要用 CONNECT_ONE_SHOT**——它按"信号触发次数"断连而非按"名称匹配"断连，一个不匹配的通知就会提前消费掉连接）。
+
+```gdscript
+static func create(ability: GASGameplayAbility, notify_source: Object, notify_signal: StringName, notify_name: StringName) -> GASAbilityTaskWaitAnimNotify
+```
+
+**使用**（落雷前摇：确认后法阵 0.4s，命中帧表现层发通知）：
+
+```gdscript
+# 能力侧：confirm 后进入前摇，等命中帧
+notify_task = GASAbilityTaskWaitAnimNotify.create(self, game, &"anim_notify", &"smite_strike")
+notify_task.task_finished.connect(_on_strike)      # 通知到 → 结算伤害
+notify_task.task_canceled.connect(_on_strike_canceled)
+
+# 表现层：法阵动画播完发通知（逻辑层不知道动画多长）
+game.emit_signal(&"anim_notify", &"smite_strike")
+```
+
+**要点**：
+- **动画与逻辑时序解耦**：逻辑等通知，动画发通知，双方只认一个名字；
+- **通知无人听合法**：前摇被打断后通知照发，但 Task 已退场（连接已断）——"表现空白合法"的镜像；
+- **连接清理**：Task 是 Node，queue_free 自动断连，无需显式 disconnect；
+- demo：demo2 落雷（法阵前摇 → 命中帧 → 结算），前摇中可被打断（无伤害）。
+
+#### 7.6.4 GASAbilityTaskWaitTargetData —— 等目标确认
+
+**逻辑**：注入 `GASAbilityTargetActor` 实例（非 UE 的传 class 自建——测试可控、2D/3D 通用）；`confirm_selection()` 读 TargetActor 缓存 → **空选择拒绝确认**（点空地不能确认，任务继续等）→ 有目标则存结果 + `end_task(false)`；`cancel_selection()` 善后 + `end_task(true)`。
+
+```gdscript
+static func create(ability: GASGameplayAbility, target_actor: GASAbilityTargetActor) -> GASAbilityTaskWaitTargetData
+func confirm_selection() -> bool   # 玩家确认（返回是否成功）
+func cancel_selection() -> void    # 玩家取消
+func get_target_data() -> GASAbilityTargetData   # 能力读确认结果
+```
+
+**使用**（落雷瞄准：右键进瞄准 → 圈选 → 左键确认）：
+
+```gdscript
+wait_task = GASAbilityTaskWaitTargetData.create(self, target_actor)
+wait_task.task_finished.connect(_on_target_confirmed)   # 确认 → 读 get_target_data() 结算
+wait_task.task_canceled.connect(_on_target_canceled)    # 取消/打断 → 善后
+```
+
+**要点**：
+- **结果交付**：Task 持有结果，能力 `get_target_data()` 读（不造带参信号绕开唯一漏斗）；
+- **买定离手**：`confirm_target()` 返回拷贝，改拷贝不影响缓存；
+- **打断善后**：能力被打断 → `end_ability` 遍历 `end_task(true)` → `actor.cancel_target()` 自动执行（"谁打开选择谁负责关"）；
+- demo：demo2 落雷（AOE 圈选 + 预览）、桌游目标选择链路。
+
+#### 7.6.5 GASAbilityTaskWaitGameplayEvent —— 等事件带数据（可超时）
+
+**逻辑**：监听 ASC 的 `gameplay_event_received` 广播信号（事件到达时**激活端 + 等待端并行**：匹配 `activation_event_tags` 的能力自动激活，等待中的 Task 收到数据）；`matches_tag` 层级匹配 → 存数据 + `end_task(false)`；超时 → `end_task(true)`。
+
+```gdscript
+static func create(ability: GASGameplayAbility, event_tag: FGameplayTag, timeout: float = -1.0) -> GASAbilityTaskWaitGameplayEvent
+func get_event_data() -> GASGameplayEventData   # instigator / target / event_magnitude
+```
+
+**使用**（反击：T 键激活 → 3s 姿态 → 受击事件到达 → 对攻击者反击）：
+
+```gdscript
+wait_task = GASAbilityTaskWaitGameplayEvent.create(self, hurt_tag, 3.0)
+wait_task.task_finished.connect(_on_event_received)   # 事件到 → get_event_data() 读攻击者
+wait_task.task_canceled.connect(_on_timeout)          # 超时 → 落空
+
+func _on_event_received() -> void:
+    var data := wait_task.get_event_data()
+    if data != null and data.instigator is TopdownEntity:
+        game.do_counter_attack(data.instigator)   # 对攻击者反击（instigator 在事件数据里）
+    end_ability(false)
+```
+
+**要点**：
+- **同一枚硬币的两面**：激活端（事件 → 能力启动）与等待端（能力启动后 → 事件续命）共用同一事件流——事件发出时 ASC 先广播信号再激活匹配能力，顺序保证等待端先收到（用激活前的状态结算）；
+- **数据消费**：`instigator`（谁打的）/ `target`（谁挨打）/ `event_magnitude`（伤害量）——等待端消费的数据就是事件生产端（`_apply_damage` 发事件时）生产的；
+- **与事件激活的组合**：同一个事件既能触发复仇（激活端）又能喂反击（等待端）；
+- demo：demo2 反击（受击反击攻击者）、复仇（事件自动激活）。
+
+#### 7.6.6 如何选 Task（速查）
+
+| 要等的东西 | 用哪个 | 超时支持 |
+| --- | --- | --- |
+| 时间（N 秒后继续） | `GASAbilityTaskDelay` | 无（本身就是计时） |
+| 玩家按某个键 | `GASAbilityTaskWaitInput` | ✅ |
+| 动画播到某帧（外部通知） | `GASAbilityTaskWaitAnimNotify` | 无（动画总会播完；靠打断兜底） |
+| 玩家选好目标并确认 | `GASAbilityTaskWaitTargetData` | 无（靠取消/打断兜底） |
+| 某个 GameplayEvent 带数据到达 | `GASAbilityTaskWaitGameplayEvent` | ✅ |
+
+> 一个能力可以同时挂多个 Task（落雷 = WaitTargetData + WaitAnimNotify 串联；
+> 反击 = WaitGameplayEvent）。组合时注意：每个 Task 独立 `end_task`，
+> 能力侧的信号回调要自己编排"哪个先完成决定能力走向"。
 
 ---
 
