@@ -19,6 +19,8 @@ var attack_ability: GASGameplayAbility
 var smite_ability: GAPlayerSmite
 var combo_ability: GAPlayerCombo
 var berserk_ability: GAPlayerBerserk
+var vengeance_ability: GAPlayerVengeance
+var counter_ability: GAPlayerCounter
 var gear_slots: Dictionary = {}
 
 func setup_player(p_attrs: Dictionary[StringName, float], p_attack_ability: GASGameplayAbility) -> void:
@@ -79,6 +81,11 @@ func try_berserk() -> bool:
 	if not is_alive():
 		return false
 	return asc.try_activate_ability(berserk_ability)
+
+func try_counter() -> bool:
+	if not is_alive():
+		return false
+	return asc.try_activate_ability(counter_ability)
 
 func get_level() -> int:
 	return int(get_attr(TopdownAttributeSet.ATTR_LEVEL))

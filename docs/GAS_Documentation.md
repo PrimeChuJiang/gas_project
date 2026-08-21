@@ -726,11 +726,19 @@ addons/gameplay_abilities_system/
 	├── gameplay_effect_spec.gd          # GE 实例
 	├── gameplay_effect_context.gd       # 效果上下文
 	├── gameplay_effect_capture_definition.gd  # 捕获声明
+	├── gameplay_cue_manager.gd          # 表现管理器（邮局广播 + 凭票 Actor Cue）
+	├── gameplay_cue_parameters.gd       # Cue 参数小票
 	├── gameplay_tag_requirements.gd     # 门禁条件（application / ongoing）
 	├── ability_system_component.gd      # ASC 核心（大脑）
 	├── gameplay_ability.gd              # 能力类
+	├── ability_target_data.gd           # 目标数据容器（actors / location）
+	├── ability_target_actor.gd          # 目标选择基类（缓存 / confirm / cancel / filter）
+	├── ability_target_actor_2d.gd       # 2D 点选 / AOE 范围多选
 	├── ability_task.gd                  # 异步任务基类
 	├── ability_task_delay.gd            # 延时任务
+	├── ability_task_wait_input.gd       # 等按键任务（连击窗口 / 超时）
+	├── ability_task_wait_anim_notify.gd # 等动画通知帧任务
+	├── ability_task_wait_target_data.gd # 等目标选择任务
 	├── modifier_pile.gd                 # 租约账页条目（op/magnitude/handle/层数/挂起）
 	├── modifier_bucket.gd               # 装配分组容器
 	├── modifier_spec.gd                 # modifier 运行时账页（resolved/value）
@@ -753,15 +761,35 @@ addons/gameplay_abilities_system/
 | 4 | GASGameplayEffect + GASEffectSpec | ✅ 完成 | 三策略 + 周期 DoT + granted_tag + 两道门禁 + 捕获声明 + Stacking 全家桶 |
 | 5 | GASGameplayAbility | ✅ 完成 | can_activate 四查 / activate + commit 分离 / push+pull 打断 / give_ability 校验站 |
 | 6 | GASAbilitySpec | ❌ 有意不做 | 每个 `give_ability` 直接 `new()` 独立实例，状态挂资源实例上，不需要 Spec 层 |
-| 7 | GASAbilityTask | ✅ 完成 | 基类 + Delay；WaitInput / WaitAnimNotify / WaitTargetData 排队中 |
+| 7 | GASAbilityTask | ✅ 完成 | 基类 + Delay + WaitInput + WaitAnimNotify + WaitTargetData 全部落地（连击窗口 / 落雷前摇 / 目标选择实战验证） |
 | 8 | 执行器 / MMC | ✅ 完成 | magnitude 四类（ScalableFloat / AttributeBased / SetByCaller / SetByCaller×Attr）+ ExecutionCalculation + 双桶落账 |
 | 9 | 依赖登记簿 | ✅ 完成 | 非快照属性依赖实时重算（簿挂被读属性的家，跨墙免拉线，环保护） |
 | 10 | GameplayCue | ✅ 完成 | 第 21 节：事件流（邮局广播 + 小票 + ASC 三时刻钩子）、凭票制 Actor Cue（工厂 + add/remove + 存在性计数）、周期 GE 每跳 EXECUTED、手动 API 全部落地；WHILE_ACTIVE 有意不做（持续表现由凭票节点自身 _process 承担）；桌游演示：眩晕星星（凭票工厂）+ 伤害飘字（GE 自动 / 手动 API 双链） |
-| 11 | TargetData | ⏳ 未开始 | 测试中目标仍是写死的引用 |
-| 12 | 网络同步 / 预测 | ❌ 明确不做 | 单机项目，Godot 网络模型与 UE 差异过大 |
+| 11 | TargetData | ✅ 完成 | TargetData 容器 + TargetActor 基类（缓存 / confirm 买定离手 / cancel / filter 注入）+ 2D 子类（点选 / 范围多选 / 实体过滤 / z 排序）+ WaitTargetData Task；demo2 落雷（AOE 预览圈）与连击（点选目标）全链路实战 |
+| 12 | 能力互斥矩阵 | ✅ 完成 | `block_abilities_with_tags` / `cancel_abilities_with_tags`（try_activate_ability 四段式：can → block 检查 → 批量打断 → 入册激活）；狂暴技能实战（buff 保持激活才有 block 窗口） |
+| 13 | 网络同步 / 预测 | ❌ 明确不做 | 单机项目，Godot 网络模型与 UE 差异过大 |
 
 > 除了上表，还额外完成了：GameplayTags 插件（享元 + 多叉树 + 引用计数）、
-> 测试场景 + F 键一键自动化回归。DEVLOG.md 记录了完整开发历程。
+> 测试场景 + F 键一键自动化回归（桌游 198 项 / topdown 111 项全绿）。
+> DEVLOG.md 记录了完整开发历程。
+
+### 13.4 机制级缺口清单（下一步开发重点）
+
+对照 tranek/GASDocumentation 全文核查（2026-08）：框架级核心机制已全部关账，
+剩余**机制级缺口**如下——与"设定/内容级"（用既有积木搭新 GE/新能力）不同，
+这些需要补字段或管道，是后续开发的主线：
+
+| # | 缺口 | tranek 章节 | 当前状态 | 实现思路 |
+| --- | --- | --- | --- | --- |
+| 1 | GE 授予能力 | 4.5.6 Granted Abilities | GE 无 granted_abilities 字段 | GE 增加能力授予列表（能力 + 等级 + 输入绑定）+ Removal Policy（移除时：立即取消 / 等自然结束 / 保留）；挂账时 give、移除时按策略处理 |
+| 2 | Modifier 级标签条件 | 4.5.4.2 | `GEModifier` 仅 attr_name/op/magnitude 三字段 | 增加 source_tags / target_tags（首次施加时判定，不参与后续周期检查） |
+| 3 | Activation Owned Tags | 4.6.9 | GA 无此字段 | GA 增加 activation_owned_tags；activate 时授予、end_ability 时撤销（可与 granted_tag 共用引用计数） |
+| 4 | Custom Application Requirement | 4.5.13 | 仅有标签版门禁 `GASGameplayTagRequirements` | 增加可写逻辑的施加条件扩展点（如"目标已有该 GE 则改时长"） |
+| 5 | 被动能力标准钩子 | 4.6.4.1 | 需手动 `give_ability` 后 `try_activate_ability` | `give_ability` 增加 auto_activate 标志（授予即激活，被动能力场景） |
+| 6 | 小 API 补齐 | 4.5.15.1 / 4.6.5 / 4.8.6 | 无公开查询/批量接口 | `get_active_effect_time_remaining`（冷却剩余时长）/ `cancel_abilities_with_tags` / `get_active_abilities` / `suppress_gameplay_cues`（GC 全局静默） |
+
+> 设定/内容级内容（新能力 Sprint/ADS/暴击/吸血、新 Task WaitAttributeChange/WaitGameplayTag/WaitOverlap、
+> 便利类 GE Containers / Ability Sets 等）属于既有框架的丰富，建议等缺口 1-6 关账后再按需推进。
 
 ---
 

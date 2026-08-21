@@ -7,6 +7,10 @@ var _chest_opened := false
 var _monster_dead := false
 var _monster_respawned := false
 var _game_over_flag := false
+var _loose_signal_count := 0
+
+func _on_loose_tag_changed(_t: FGameplayTag, _a: bool) -> void:
+	_loose_signal_count += 1
 
 func is_pass() -> bool:
 	return _fail_count == 0
@@ -32,6 +36,12 @@ func run_all() -> void:
 	await _run_smite_regression()
 	await _run_combo_regression()
 	await _run_berserk_regression()
+	await _run_grant_regression()
+	await _run_event_regression()
+	await _run_loose_regression()
+	await _run_counter_regression()
+	await _run_car_regression()
+	await _run_optim_regression()
 	print("=== 回归结束：%s（通过 %d / 失败 %d）===" % ["ALL PASS" if is_pass() else "HAS FAILURE", _pass_count, _fail_count])
 
 func _timer(seconds: float) -> void:
@@ -252,6 +262,10 @@ func _run_smite_regression() -> void:
 		return
 	sg._running = false
 	sg._respawn_queue.clear()
+	sg.enable_vengeance = false
+	var veng_buff_query := FGameplayTagContainer.new()
+	veng_buff_query.add_tag(GameplayTags.request_gameplay_tag(&"Ability.Vengeance.Buff"))
+	sg.player.asc.remove_active_effects_with_tags(veng_buff_query)
 	sg.player.attr_set.apply_base_value_change(&"Health", 9999.0)
 	var radius_px := TopdownGame.SMITE_RADIUS * 2.0
 	var victims: Array[TopdownMonster] = []
@@ -391,6 +405,10 @@ func _run_berserk_regression() -> void:
 		return
 	sg._running = false
 	sg._respawn_queue.clear()
+	sg.enable_vengeance = false
+	var veng_buff_query2 := FGameplayTagContainer.new()
+	veng_buff_query2.add_tag(GameplayTags.request_gameplay_tag(&"Ability.Vengeance.Buff"))
+	sg.player.asc.remove_active_effects_with_tags(veng_buff_query2)
 	sg.player.attr_set.apply_base_value_change(&"Health", 9999.0)
 	var victims: Array[TopdownMonster] = []
 	for m in sg.monsters:
@@ -439,3 +457,263 @@ func _run_berserk_regression() -> void:
 	berserk_query2.add_tag(berserk_tag)
 	sg.player.asc.remove_active_effects_with_tags(berserk_query2)
 	sg._running = true
+
+## ---------------- 授予回归（GE 授予被动能力：granted_abilities） ----------------
+
+func _run_grant_regression() -> void:
+	print("=== 授予回归 ===")
+	var g := _new_game()
+	var player: TopdownPlayer = g.player
+	player.attr_set.apply_base_value_change(&"Level", 1.0)
+	var amulet: Dictionary = g.get_gear_catalog()["aura_amulet"]
+	var defense_base := player.get_attr(&"Defense")
+	var aura_ability: GAPassiveAura = amulet.ge.granted_abilities[0]
+
+	_check(player.asc._abilities.is_empty() or not player.asc._abilities.has(aura_ability), "授予-01 佩戴前无圣光能力")
+	_check(player.equip_gear(amulet.ge, amulet.slot, amulet.name), "授予-02 佩戴圣光护符")
+	_check(is_equal_approx(player.get_attr(&"Defense"), defense_base + 5.0), "授予-03 授予即激活：Defense +5")
+	_check(player.asc._abilities.has(aura_ability), "授予-04 能力已授予（_abilities 含圣光）")
+	_check(aura_ability.is_active, "授予-05 被动能力处于激活态")
+	_check(player.get_gear_name(amulet.slot) == amulet.name, "授予-06 装备槽记录护符")
+
+	_check(player.unequip_gear(amulet.slot), "授予-07 摘除护符")
+	_check(is_equal_approx(player.get_attr(&"Defense"), defense_base), "授予-08 防御回退")
+	_check(not player.asc._abilities.has(aura_ability), "授予-09 能力已回收（_abilities 移除）")
+	_check(not aura_ability.is_active, "授予-10 被动已结束")
+
+	_check(player.equip_gear(amulet.ge, amulet.slot, amulet.name), "授予-11 再次佩戴")
+	_check(is_equal_approx(player.get_attr(&"Defense"), defense_base + 5.0), "授予-12 防御 +5")
+	_check(player.asc._ability_grant_counts.get(aura_ability, 0) == 1, "授予-13 授予计数为 1")
+	_check(player.unequip_gear(amulet.slot), "授予-14 摘除")
+	_check(is_equal_approx(player.get_attr(&"Defense"), defense_base), "授予-15 防御回退")
+	_check(player.asc._ability_grant_counts.is_empty(), "授予-16 计数清空（引用计数对称）")
+
+	_check(player.equip_gear(amulet.ge, amulet.slot, amulet.name), "授予-17 佩戴（测打断自清理）")
+	_check(aura_ability.is_active, "授予-18 被动激活")
+	player.asc.cancel_ability(aura_ability)
+	_check(not aura_ability.is_active, "授予-19 被动被打断")
+	_check(is_equal_approx(player.get_attr(&"Defense"), defense_base), "授予-20 打断后自清理 buff 回退")
+	_check(player.asc._abilities.has(aura_ability), "授予-21 能力仍在（GE 还授予着）")
+	_check(player.unequip_gear(amulet.slot), "授予-22 摘除")
+	_check(not player.asc._abilities.has(aura_ability), "授予-23 能力最终回收")
+
+	var instant_ge := GASGameplayEffect.new()
+	instant_ge.duration_policy = GASEnums.DurationPolicy.INSTANT
+	instant_ge.granted_abilities = [GAPassiveAura.new()]
+	var instant_spec := player.asc.make_effect_spec(instant_ge)
+	_check(player.asc.apply_gameplay_effect_spec_to_self(instant_spec) == GASAbilitySystemComponent.INVALID_HANDLE, "授予-24 INSTANT 授予被拒（fail-closed）")
+	_check(is_equal_approx(player.get_attr(&"Defense"), defense_base), "授予-25 INSTANT 拒绝无副作用")
+
+	g.queue_free()
+	await _timer(0.1)
+
+## ---------------- 事件驱动回归（GameplayEvent.Hurt 触发复仇） ----------------
+
+func _run_event_regression() -> void:
+	print("=== 事件驱动回归 ===")
+	var g := _new_game()
+	var player: TopdownPlayer = g.player
+	var vengeance: GAPlayerVengeance = player.vengeance_ability
+	if vengeance == null:
+		_check(false, "事件-00 复仇能力已装配")
+		return
+	g._running = false
+	g.enable_vengeance = true
+	g.player.attr_set.apply_base_value_change(&"Health", 9999.0)
+	var monster: TopdownMonster = g.monsters[0]
+	monster.pos = player.pos + Vector2(30.0, 0.0)
+	var monster_attack := monster.get_attr(&"Attack")
+	var player_defense := player.get_attr(&"Defense")
+	var attack_base := player.get_attr(&"Attack")
+	var form := TopdownAttackForm.new()
+	form.kind = TopdownAttackForm.Kind.MELEE_ARC
+	form.damage_coefficient = 0.5
+	form.range = 120.0
+	var expected_damage := maxf(1.0, monster_attack * 0.5 - player_defense)
+
+	_check(vengeance.last_event_data == null, "事件-01 初始未受击：无事件数据")
+	g.do_entity_melee_attack(monster, form)
+	_check(vengeance.last_event_data != null, "事件-02 受击后事件数据注入")
+	_check(is_equal_approx(vengeance.last_event_data.event_magnitude, expected_damage), "事件-03 事件携带伤害量")
+	_check(is_equal_approx(player.get_attr(&"Attack"), attack_base * 1.2), "事件-04 复仇触发：攻击 ×1.2")
+	_check(player.asc.has_tag(GameplayTags.request_gameplay_tag(&"Ability.Vengeance.Cooldown")), "事件-05 复仇冷却 tag 已授予")
+
+	var attack_buffed := player.get_attr(&"Attack")
+	g.do_entity_melee_attack(monster, form)
+	_check(is_equal_approx(player.get_attr(&"Attack"), attack_buffed), "事件-06 冷却中再受击不叠加（CD 拒绝）")
+
+	await _timer(3.2)
+	_check(is_equal_approx(player.get_attr(&"Attack"), attack_base), "事件-07 3s buff 到期攻击回落")
+	await _timer(2.0)
+	var before := player.get_attr(&"Attack")
+	g.do_entity_melee_attack(monster, form)
+	_check(is_equal_approx(player.get_attr(&"Attack"), before * 1.2), "事件-08 冷却过后再受击再次触发")
+	_check(is_equal_approx(vengeance.last_event_data.event_magnitude, expected_damage), "事件-09 事件数据持续可读（快照）")
+
+	g.queue_free()
+	await _timer(0.1)
+
+## ---------------- Loose Tag 回归（手动 tag：add/remove/混账/信号/死亡链路） ----------------
+
+func _run_loose_regression() -> void:
+	print("=== Loose Tag 回归 ===")
+	var g := _new_game()
+	var player: TopdownPlayer = g.player
+	var dead_tag := GameplayTags.request_gameplay_tag(&"State.Dead")
+	var shield_tag := GameplayTags.request_gameplay_tag(&"State.Buff.Shield")
+
+	_check(not player.asc.has_tag(dead_tag), "Loose-01 初始无 State.Dead")
+	_loose_signal_count = 0
+	player.asc.gameplay_tag_changed.connect(_on_loose_tag_changed)
+	player.asc.add_loose_tag(dead_tag)
+	_check(player.asc.has_tag(dead_tag), "Loose-02 add 后 has_tag 命中")
+	player.asc.remove_loose_tag(dead_tag)
+	_check(not player.asc.has_tag(dead_tag), "Loose-03 remove 后消失")
+	_check(_loose_signal_count >= 2, "Loose-04 增删各触发一次 gameplay_tag_changed")
+
+	var ge_tag := GASGameplayEffect.new()
+	ge_tag.duration_policy = GASEnums.DurationPolicy.DURATION
+	ge_tag.duration = 10.0
+	var granted := FGameplayTagContainer.new()
+	granted.add_tag(shield_tag)
+	ge_tag.granted_tag = granted
+	var ge_handle := player.asc.apply_gameplay_effect_spec_to_self(player.asc.make_effect_spec(ge_tag))
+	_check(player.asc.has_tag(shield_tag), "Loose-05 GE 授予 tag")
+	player.asc.add_loose_tag(shield_tag)
+	_check(player.asc._tag_counts.get(shield_tag, 0) == 2, "Loose-06 混账计数：GE + Loose = 2")
+	_check(player.asc.remove_active_effect(ge_handle), "Loose-07 移除 GE")
+	_check(player.asc.has_tag(shield_tag), "Loose-08 GE 移除后 tag 仍在（Loose 撑住计数）")
+	_check(player.asc._tag_counts.get(shield_tag, 0) == 1, "Loose-09 计数降为 1")
+	player.asc.remove_loose_tag(shield_tag)
+	_check(not player.asc.has_tag(shield_tag), "Loose-10 Loose 移除后 tag 消失（归零）")
+
+	var invalid_tag := FGameplayTag.new()
+	player.asc.add_loose_tag(invalid_tag)
+	player.asc.remove_loose_tag(invalid_tag)
+	_check(true, "Loose-11 无效 tag 增删被防御（不崩）")
+
+	player.attr_set.apply_base_value_change(&"Health", -9999.0)
+	_check(player.asc.has_tag(dead_tag), "Loose-12 玩家死亡 → 自动挂 State.Dead")
+
+	g.queue_free()
+	await _timer(0.1)
+
+## ---------------- Custom Application Requirement 回归（施加条件：等级 ≥ 2） ----------------
+
+func _run_car_regression() -> void:
+	print("=== 施加条件回归 ===")
+	var g := _new_game()
+	var player: TopdownPlayer = g.player
+	var amulet: Dictionary = g.get_gear_catalog()["aura_amulet"]
+	var defense_base := player.get_attr(&"Defense")
+
+	_check(player.get_attr(&"Level") < 2.0, "CAR-01 初始等级 < 2")
+	_check(not player.equip_gear(amulet.ge, amulet.slot, amulet.name), "CAR-02 Lv1 佩戴护符被拒（custom requirement）")
+	_check(is_equal_approx(player.get_attr(&"Defense"), defense_base), "CAR-03 拒绝无副作用（防御未变）")
+	_check(player.get_gear_name(amulet.slot).is_empty(), "CAR-04 装备槽未记录（施加失败）")
+
+	player.attr_set.apply_base_value_change(&"Level", 1.0)
+	_check(player.get_attr(&"Level") >= 2.0, "CAR-05 升级到 Lv2")
+	_check(player.equip_gear(amulet.ge, amulet.slot, amulet.name), "CAR-06 Lv2 佩戴成功")
+	_check(is_equal_approx(player.get_attr(&"Defense"), defense_base + 5.0), "CAR-07 被动生效：防御 +5")
+	_check(player.unequip_gear(amulet.slot), "CAR-08 摘除正常")
+
+	var sword: Dictionary = g.get_gear_catalog()["sword"]
+	_check(player.equip_gear(sword.ge, sword.slot, sword.name), "CAR-09 无条件的 GE 不受影响（Lv1 也能装铁剑）")
+
+	g.queue_free()
+	await _timer(0.1)
+
+## ---------------- 优化回归（tag 祖先 O(1) + 首跳立即开关） ----------------
+
+func _run_optim_regression() -> void:
+	print("=== 优化回归 ===")
+	var g := _new_game()
+	var dummy := _make_dummy("优化木桩", {&"Health": 100.0, &"MaxHealth": 100.0, &"Attack": 20.0,
+		&"Defense": 5.0, &"MoveSpeed": 150.0, &"Level": 1.0, &"XP": 0.0})
+	var stun_tag := GameplayTags.request_gameplay_tag(&"State.Debuff.Stun")
+	var debuff_tag := GameplayTags.request_gameplay_tag(&"State.Debuff")
+
+	_check(not dummy.asc.has_tag(debuff_tag), "优化-01 初始无父级 tag")
+	dummy.asc.add_loose_tag(stun_tag)
+	_check(dummy.asc.has_tag(stun_tag), "优化-02 精确 tag 命中")
+	_check(dummy.asc.has_tag(debuff_tag), "优化-03 父级 tag 命中（O(1) 祖先索引）")
+	dummy.asc.remove_loose_tag(stun_tag)
+	_check(not dummy.asc.has_tag(stun_tag), "优化-04 remove 后精确消失")
+	_check(not dummy.asc.has_tag(debuff_tag), "优化-05 remove 后父级消失")
+	_check(dummy.asc._tag_ancestor_counts.is_empty(), "优化-06 祖先索引清空（无泄漏）")
+
+	var mod := GEModifier.new()
+	mod.attr_name = &"Health"
+	mod.op = GASEnums.ModifierOp.ADD
+	var mag := GASModifierMagnitudeScalableFloat.new()
+	mag.value = -5.0
+	mod.magnitude = mag
+
+	var dot_immediate := GASGameplayEffect.new()
+	dot_immediate.duration_policy = GASEnums.DurationPolicy.DURATION
+	dot_immediate.duration = 5.0
+	dot_immediate.period = 1.0
+	dot_immediate.execute_periodic_effect_on_application = true
+	dot_immediate.modifiers.append(mod)
+	var hp0 := dummy.get_attr(&"Health")
+	var dot_handle := dummy.asc.apply_gameplay_effect_spec_to_self(dummy.asc.make_effect_spec(dot_immediate))
+	_check(is_equal_approx(dummy.get_attr(&"Health"), hp0 - 5.0), "优化-07 立即跳：apply 即掉血")
+	await _timer(1.2)
+	_check(is_equal_approx(dummy.get_attr(&"Health"), hp0 - 10.0), "优化-08 下一跳仍在完整周期后")
+	dummy.asc.remove_active_effect(dot_handle)
+
+	var dot_delayed := GASGameplayEffect.new()
+	dot_delayed.duration_policy = GASEnums.DurationPolicy.DURATION
+	dot_delayed.duration = 5.0
+	dot_delayed.period = 1.0
+	dot_delayed.modifiers.append(mod)
+	var hp1 := dummy.get_attr(&"Health")
+	dummy.asc.apply_gameplay_effect_spec_to_self(dummy.asc.make_effect_spec(dot_delayed))
+	_check(is_equal_approx(dummy.get_attr(&"Health"), hp1), "优化-09 关闭开关：apply 不掉血")
+	await _timer(1.2)
+	_check(is_equal_approx(dummy.get_attr(&"Health"), hp1 - 5.0), "优化-10 关闭开关：period 后才跳")
+
+	g.queue_free()
+	await _timer(0.1)
+
+## ---------------- 反击回归（WaitGameplayEvent：激活后等受伤事件） ----------------
+
+func _run_counter_regression() -> void:
+	print("=== 反击回归 ===")
+	var g := _new_game()
+	var player: TopdownPlayer = g.player
+	var counter: GAPlayerCounter = player.counter_ability
+	if counter == null:
+		_check(false, "反击-00 反击能力已装配")
+		return
+	g._running = false
+	g.enable_vengeance = true
+	g.player.attr_set.apply_base_value_change(&"Health", 9999.0)
+	var monster: TopdownMonster = g.monsters[2]
+	monster.pos = player.pos + Vector2(30.0, 0.0)
+	var monster_defense := monster.get_attr(&"Defense")
+	var player_attack := player.get_attr(&"Attack")
+	var form := TopdownAttackForm.new()
+	form.kind = TopdownAttackForm.Kind.MELEE_ARC
+	form.damage_coefficient = 0.5
+	form.range = 120.0
+
+	_check(player.try_counter(), "反击-01 T 键激活反击姿态")
+	_check(counter.is_active and counter.wait_task != null and counter.wait_task.is_running, "反击-02 WaitGameplayEvent 等待中")
+
+	var monster_hp0 := monster.get_attr(&"Health")
+	g.do_entity_melee_attack(monster, form)
+	var counter_expected := maxf(1.0, player_attack * 1.5 - monster_defense)
+	_check(is_equal_approx(monster.get_attr(&"Health"), monster_hp0 - counter_expected), "反击-03 受击 → 反击伤害 max(1, 攻×1.5−防)")
+	_check(not counter.is_active, "反击-04 反击后能力结束")
+
+	var hp_before_timeout := monster.get_attr(&"Health")
+	_check(player.try_counter(), "反击-05 再次激活")
+	_check(counter.is_active, "反击-06 反击姿态中")
+	await _timer(3.2)
+	_check(not counter.is_active, "反击-07 3s 超时落空")
+	_check(is_equal_approx(monster.get_attr(&"Health"), hp_before_timeout), "反击-08 超时无反击伤害")
+
+	g.queue_free()
+	await _timer(0.1)

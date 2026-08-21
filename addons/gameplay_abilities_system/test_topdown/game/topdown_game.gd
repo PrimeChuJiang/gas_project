@@ -45,6 +45,8 @@ const TAG_ATTACK := &"Ability.Attack"
 const TAG_ATTACK_COOLDOWN := &"Ability.Attack.Cooldown"
 const TAG_SMITE := &"Ability.Spell.Smite"
 const TAG_BERSERK := &"Ability.Berserk"
+const TAG_VENGEANCE_CD := &"Ability.Vengeance.Cooldown"
+const TAG_EVENT_HURT := &"GameplayEvent.Hurt"
 const BERSERK_DURATION: float = 3.0
 
 var player: TopdownPlayer
@@ -65,7 +67,12 @@ var _xp_ge: GASGameplayEffect
 var _heal_potion_ge: GASGameplayEffect
 var _xp_potion_ge: GASGameplayEffect
 var berserk_ge: GASGameplayEffect = null
+var vengeance_ge: GASGameplayEffect = null
+var vengeance_cd_ge: GASGameplayEffect = null
+var ge_amulet_aura: GASGameplayEffect = null
 var _gear_catalog: Dictionary = {}
+# 复仇事件开关：默认关（测试隔离），真实玩法场景开启
+var enable_vengeance: bool = false
 var _respawn_queue: Array[Dictionary] = []  # {kind, tile, timer}
 var _rng := RandomNumberGenerator.new()
 var _running: bool = false
@@ -104,6 +111,15 @@ func _load_content() -> void:
 	_xp_ge = load(base + "items/ge_xp_gain.tres")
 	_heal_potion_ge = load(base + "items/ge_heal_potion.tres")
 	_xp_potion_ge = load(base + "items/ge_xp_potion.tres")
+	var aura_ability := GAPassiveAura.new()
+	ge_amulet_aura = GASGameplayEffect.new()
+	ge_amulet_aura.duration_policy = GASEnums.DurationPolicy.INFINITE
+	ge_amulet_aura.granted_abilities = [aura_ability]
+	ge_amulet_aura.activate_abilities_on_grant = true
+	var amulet_level_req := GASLevelRequirement.new()
+	amulet_level_req.min_level = 2
+	ge_amulet_aura.custom_application_requirements = [amulet_level_req]
+	ge_amulet_aura.comment = "圣光护符：授予并立即激活圣光被动（Defense +5），要求等级 ≥ 2"
 	_gear_catalog["sword"] = {"slot": TopdownPlayer.SLOT_WEAPON, "name": "铁剑", "ge": load(base + "gear/ge_sword.tres")}
 	_gear_catalog["great_sword"] = {"slot": TopdownPlayer.SLOT_WEAPON, "name": "大剑", "ge": load(base + "gear/ge_great_sword.tres")}
 	_gear_catalog["chain_mail"] = {"slot": TopdownPlayer.SLOT_ARMOUR, "name": "锁甲", "ge": load(base + "gear/ge_chain_mail.tres")}
@@ -111,6 +127,7 @@ func _load_content() -> void:
 	_gear_catalog["ring_attack"] = {"slot": TopdownPlayer.SLOT_RING, "name": "力量之戒", "ge": load(base + "gear/ge_ring_attack.tres")}
 	_gear_catalog["ring_speed"] = {"slot": TopdownPlayer.SLOT_RING, "name": "疾风之戒", "ge": load(base + "gear/ge_ring_speed.tres")}
 	_gear_catalog["boots"] = {"slot": TopdownPlayer.SLOT_BOOTS, "name": "疾风靴", "ge": load(base + "gear/ge_boots.tres")}
+	_gear_catalog["aura_amulet"] = {"slot": TopdownPlayer.SLOT_ARMOUR, "name": "圣光护符", "ge": ge_amulet_aura}
 
 func _build_attack_forms() -> void:
 	attack_forms = [
@@ -177,10 +194,21 @@ func _spawn_world() -> void:
 	cancel_tags.add_tag(GameplayTags.request_gameplay_tag(TAG_SMITE))
 	berserk.cancel_abilities_with_tags = cancel_tags
 	player.berserk_ability = berserk
+	var counter := GAPlayerCounter.new()
+	counter.game = self
+	player.counter_ability = counter
+	var vengeance := GAPlayerVengeance.new()
+	vengeance.game = self
+	var vengeance_tags := FGameplayTagContainer.new()
+	vengeance_tags.add_tag(GameplayTags.request_gameplay_tag(TAG_EVENT_HURT))
+	vengeance.activation_event_tags = vengeance_tags
+	player.vengeance_ability = vengeance
 	player.setup_player(hero_attrs, ability)
 	player.asc.give_ability(smite)
 	player.asc.give_ability(combo)
 	player.asc.give_ability(berserk)
+	player.asc.give_ability(vengeance)
+	player.asc.give_ability(counter)
 	berserk_ge = GASGameplayEffect.new()
 	berserk_ge.duration_policy = GASEnums.DurationPolicy.DURATION
 	berserk_ge.duration = BERSERK_DURATION
@@ -194,6 +222,27 @@ func _spawn_world() -> void:
 	berserk_mag.value = 1.0
 	berserk_mod.magnitude = berserk_mag
 	berserk_ge.modifiers.append(berserk_mod)
+
+	vengeance_ge = GASGameplayEffect.new()
+	vengeance_ge.duration_policy = GASEnums.DurationPolicy.DURATION
+	vengeance_ge.duration = 3.0
+	var vengeance_buff_tag := FGameplayTagContainer.new()
+	vengeance_buff_tag.add_tag(GameplayTags.request_gameplay_tag(&"Ability.Vengeance.Buff"))
+	vengeance_ge.granted_tag = vengeance_buff_tag
+	var vengeance_mod := GEModifier.new()
+	vengeance_mod.attr_name = &"Attack"
+	vengeance_mod.op = GASEnums.ModifierOp.MULTIPLY
+	var vengeance_mag := GASModifierMagnitudeScalableFloat.new()
+	vengeance_mag.value = 0.2
+	vengeance_mod.magnitude = vengeance_mag
+	vengeance_ge.modifiers.append(vengeance_mod)
+	vengeance_cd_ge = GASGameplayEffect.new()
+	vengeance_cd_ge.duration_policy = GASEnums.DurationPolicy.DURATION
+	vengeance_cd_ge.duration = 5.0
+	var vengeance_cd_tag := FGameplayTagContainer.new()
+	vengeance_cd_tag.add_tag(GameplayTags.request_gameplay_tag(TAG_VENGEANCE_CD))
+	vengeance_cd_ge.granted_tag = vengeance_cd_tag
+	vengeance.cooldown_ge = vengeance_cd_ge
 	player.pos = _tile_to_world(_player_spawn)
 	player.died.connect(_on_player_died)
 	player.attr_set.leveled_up.connect(func(level: int) -> void:
@@ -464,6 +513,12 @@ func _apply_damage(source: TopdownEntity, target: TopdownEntity, form: TopdownAt
 	source.asc.apply_gameplay_effect_spec_to_target(spec, target.asc)
 	var damage := maxf(1.0, source.get_attr(&"Attack") * form.damage_coefficient - target.get_attr(&"Defense"))
 	damage_applied.emit(source.display_name, target.display_name, damage, target, source)
+	if target == player and enable_vengeance:
+		var event_data := GASGameplayEventData.new()
+		event_data.instigator = source
+		event_data.target = target
+		event_data.event_magnitude = damage
+		player.asc.send_gameplay_event_to_actor(player.asc, GameplayTags.request_gameplay_tag(TAG_EVENT_HURT), event_data)
 
 func do_smite(targets: Array[TopdownEntity], center: Vector2) -> void:
 	if targets.is_empty():
@@ -482,6 +537,16 @@ func do_smite(targets: Array[TopdownEntity], center: Vector2) -> void:
 func start_smite_casting() -> void:
 	smite_casting.emit()
 
+func do_counter_attack(attacker: TopdownEntity) -> void:
+	if not attacker.is_alive():
+		return
+	var form := TopdownAttackForm.new()
+	form.kind = TopdownAttackForm.Kind.MELEE_ARC
+	form.form_name = "反击"
+	form.damage_coefficient = 1.5
+	_apply_damage(player, attacker, form)
+	message.emit("反击！")
+
 func _on_monster_died(entity: TopdownEntity) -> void:
 	var monster := entity as TopdownMonster
 	monster_died.emit(monster)
@@ -499,6 +564,7 @@ func _give_player_xp(amount: float) -> void:
 
 func _on_player_died(_entity: TopdownEntity) -> void:
 	_running = false
+	player.asc.add_loose_tag(GameplayTags.request_gameplay_tag(&"State.Dead"))
 	message.emit("勇者倒下了……按 R 重开")
 	game_over.emit()
 

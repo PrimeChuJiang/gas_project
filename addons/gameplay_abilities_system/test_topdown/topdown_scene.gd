@@ -101,11 +101,14 @@ func _ready() -> void:
 	game = TopdownGame.new()
 	game.name = "Game"
 	add_child(game)
+	game.enable_vengeance = true
 	game.start_game()
 	_connect_game_signals()
 	_sync_all_sprites()
 	if "--run-tests" in OS.get_cmdline_user_args():
 		_run_regression()
+	elif "--death-smoke" in OS.get_cmdline_user_args():
+		_run_death_smoke()
 	elif "--ui-check" in OS.get_cmdline_user_args():
 		_run_ui_check()
 
@@ -329,8 +332,12 @@ func _input(event: InputEvent) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not game or not game.player or _game_over_shown:
 		return
-	if event is InputEventKey and event.pressed and event.keycode == KEY_Q:
-		game.player.try_berserk()
+	if event is InputEventKey and event.pressed:
+		match event.keycode:
+			KEY_Q:
+				game.player.try_berserk()
+			KEY_T:
+				game.player.try_counter()
 
 ## ---------------- 实体渲染 ----------------
 
@@ -390,9 +397,9 @@ func _ensure_entity_sprite(entity: TopdownEntity) -> Sprite2D:
 		body.set_meta(GASAbilityTargetActor.ENTITY_META, entity)
 	if entity is TopdownPlayer:
 		_build_player_light()
-		entity.health_changed.connect(_on_entity_health_changed.bind(entity))
+		entity.health_changed.connect(_on_entity_health_changed.bind(entity), CONNECT_REFERENCE_COUNTED)
 	if entity is TopdownMonster:
-		entity.health_changed.connect(_on_entity_health_changed.bind(entity))
+		entity.health_changed.connect(_on_entity_health_changed.bind(entity), CONNECT_REFERENCE_COUNTED)
 	return sprite
 
 func _remove_entity_sprite(entity: TopdownEntity) -> void:
@@ -416,8 +423,10 @@ func _on_entity_health_changed(current: float, max_value: float, entity: Topdown
 	if _entity_bars.has(entity):
 		var bar: ColorRect = _entity_bars[entity]
 		bar.size.x = 48.0 * clampf(current / max_value, 0.0, 1.0)
-	if current <= 0.0:
+	if current <= 0.0 and entity is TopdownMonster:
 		_start_death_anim(entity)
+	elif current <= 0.0:
+		_hit_anim.erase(entity)
 	elif _entity_sprites.has(entity):
 		_start_hit_anim(entity)
 
@@ -540,7 +549,7 @@ func _build_hud() -> void:
 	log_panel.add_child(log_label)
 
 	hint_label = Label.new()
-	hint_label.text = "WASD 移动 · 空格/左键 攻击 · 右键 落雷（圈选 AOE） · Q 狂暴 · E 开箱 · R 重开"
+	hint_label.text = "WASD 移动 · 空格/左键 攻击 · 右键 落雷 · Q 狂暴 · T 反击 · E 开箱 · R 重开"
 	hint_label.add_theme_color_override("font_color", Color(0.55, 0.6, 0.68, 1))
 	hint_label.add_theme_font_size_override("font_size", 12)
 	vbox.add_child(hint_label)
@@ -1149,6 +1158,16 @@ func _run_regression() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	get_tree().quit(0 if test_runner.is_pass() else 1)
+
+## 冒烟：玩家死亡 → 死亡动画期 → 玩家 sprite 不被怪物死亡路径移除（修复重复连接）
+func _run_death_smoke() -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	game.player.attr_set.apply_base_value_change(&"Health", -9999.0)
+	await get_tree().create_timer(0.5).timeout
+	var ok := _entity_sprites.has(game.player)
+	print("DEATH_SMOKE player_sprite_still_tracked=", ok)
+	get_tree().quit(0 if ok else 1)
 
 func _run_ui_check() -> void:
 	get_window().size = Vector2i(1152, 648)

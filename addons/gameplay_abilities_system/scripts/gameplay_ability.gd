@@ -14,6 +14,9 @@ signal ability_ended(ability: GASGameplayAbility, was_cancelled: bool)
 # 激活能力不能有的标签，有任何一个都不能激活
 @export var activation_blocked_tags: FGameplayTagContainer = FGameplayTagContainer.new()
 
+# 激活能力事件标签
+@export var activation_event_tags: FGameplayTagContainer = FGameplayTagContainer.new()
+
 # 能力激活中能力被打断的标签
 @export var cancel_with_tags: FGameplayTagContainer = FGameplayTagContainer.new() 
 
@@ -28,6 +31,8 @@ signal ability_ended(ability: GASGameplayAbility, was_cancelled: bool)
 
 # 冷却GE，其granted_tag作为冷却标记，激活的时候施加给自身
 @export var cooldown_ge: GASGameplayEffect
+
+var last_event_data: GASGameplayEventData = null
 
 # 所属的asc，在调用give_ability的时候注入
 var asc: GASAbilitySystemComponent

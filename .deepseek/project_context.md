@@ -1,7 +1,7 @@
 # project_context.md —— 项目状态快照
 
 > 本文件记录**已验证/已落地**的事实。权威源头：仓库内 DEVLOG.md、git 历史。
-> 最后更新：2026-08-14（会话 6，WaitInput/WaitAnimNotify/互斥矩阵三课关账）
+> 最后更新：2026-08-14（会话 6，九课关账：UE GAS 单机版全貌对齐完毕）
 
 ## 项目一句话
 
@@ -155,10 +155,60 @@ Godot 4.7（Forward Plus）下用 GDScript 复刻 UE GameplayAbilitySystem 单�
     tag 消失（GE 到期/移除）→ 结束；覆写 end_ability 断连防 RefCounted 泄漏；
     互斥自洽方案：狂暴 cancel 落雷前摇 + block 落雷激活（用户否决自相矛盾版）
   - ✅ 回归：topdown 92→**111/0**（狂暴 19 条），桌游 198/0，UI 0
+- **GE 授予 + 被动能力课（第 26 节）关账**（2026-08-14）：
+  - ✅ 框架（用户）：`granted_abilities` + `activate_abilities_on_grant` 两字段；
+    **引用计数**（_ability_grant_counts，tag 同款：先给后记账/归零才移除）；
+    entry 凭据 + _cleanup_effect 回收（唯一漏斗）；INSTANT fail-closed
+    （审查三连错修正：位置/缺 return/文案假口供）
+  - ✅ 圣光护符：佩戴 → 授予即激活圣光被动（Defense +5，能力自己挂 GE 自清理）；
+    摘除 → 能力回收 → buff 回退
+  - ✅ 回归：topdown 111→**136/0**（授予 25 条），桌游 198/0，UI 0
+  - 新账：catalog 引用 null 陷阱（创建顺序）；装备槽存显示名非 key
+- **事件驱动激活课（第 27 节）关账**（2026-08-14）：
+  - ✅ 框架（用户）：`GASGameplayEventData` 小票 + `activation_event_tags`/
+    `last_event_data`（ASC 注入零破坏）+ `send_gameplay_event_to_actor` →
+    `_on_gameplay_event` 层级匹配激活；**事件=激活入口非授予机制**
+    （没 grant 的能力事件激活不了——UE 同款）；审查抓拼写/字段缺失两编译错
+  - ✅ 复仇技能：受击发 GameplayEvent.Hurt（带伤害量）→ 自动激活 →
+    3s 攻击 ×1.2（buff 带 granted tag 可驱散）+ 5s 冷却
+  - ✅ 回归：topdown 136→**145/0**（事件 9 条），桌游 198/0，UI 0
+  - 新账：**enable_vengeance 开关隔离测试**（复仇污染全测试：AI 触发不可控，
+    断言必须建立在可控状态上）
+- **Loose Tags 课（第 28 节）关账**（2026-08-14）：
+  - ✅ 框架（用户）：`add_loose_tag` / `remove_loose_tag` 两薄壳公开方法
+    （无效 tag 防御 + 复用 _add/_remove_owned_tag）——Loose 无需新机制，
+    与 GE 授予的 tag 混同一本 _tag_counts 账（引用计数天然正确）
+  - ✅ 玩家死亡 → add_loose_tag(State.Dead)（经典 UE 用例）
+  - ✅ 回归：topdown 145→**157/0**（Loose 12 条），桌游 198/0，UI 0
+  - 新账：**lambda 值捕获快照又踩一次**（DEVLOG 22 三遍教训：回调改状态
+    必须成员变量+命名函数）
+- **WaitGameplayEvent 课（第 29 节）关账**（2026-08-14）：
+  - ✅ 框架（用户）：ASC `gameplay_event_received` 广播信号（_on_gameplay_event
+    开头 emit，激活端+等待端并行）+ `GASAbilityTaskWaitGameplayEvent`
+    （WaitInput 超时 + WaitAnimNotify 监听的组合；get_event_data 交付）
+  - ✅ 反击技能（T）：3s 反击姿态 → 受击 → 对攻击者 1.5× 反击伤害；超时落空；
+    与复仇（激活端）共存实证（emit 先行 → 反击用激活前 Attack）
+  - ✅ 回归：topdown 157→**165/0**（反击 8 条），桌游 198/0，UI 0
+  - 新账：**漏 emit**（信号声明了 Task 连了中间广播断线）；反击秒杀选怪
+    （复读"选怪算血量"）
+- **Custom Application Requirement 课（第 30 节）关账**（2026-08-14）：
+  - ✅ 框架（用户）：`GASCustomApplicationRequirement` 基类（can_apply 虚函数，
+    fail-open 默认放行——对齐 execution 模式）+ GE 数组字段 + apply 入口检查
+    （target_asc 就位后，与 tag 版并列双门禁）
+  - ✅ GASLevelRequirement：圣光护符要求 Level ≥ 2（读属性——tag 检查做不到）
+  - ✅ 回归：topdown 165→**174/0**（CAR 9 条），桌游 198/0，UI 0
+  - 新账：既有测试被新条件破坏（授予回归玩家 Lv1 佩戴挂——需全局排查）
+- **加餐池收官课（第 31 节）关账**（2026-08-14）：
+  - ✅ tag 祖先 O(1)（用户实现）：`_tag_ancestor_counts` 反向祖先索引双写
+    （跟 _tag_counts 0→1/1→0 同步，UE TagMap 同款）+ has_tag 改查表；
+    **过程事故**：AI 重复实现导致声明冲突（动手前先 git diff 看用户已放代码）
+  - ✅ 首跳立即开关（AI 实现）：GE `execute_periodic_effect_on_application`
+    （默认 false）+ apply 入账后立即 _apply_periodic_effect（period_timer 不动）
+  - ✅ 回归：topdown 174→**184/0**（优化 10 条），桌游 198/0，UI 0
+  - 新账：两个周期 GE 共用 dummy 时序污染（先移除再测）
 - **UE 语义查证**（AGENTS.md 已记）：tranek/GASDocumentation 4.6.9 Ability Tags
   表格（四字段区别：查 ASC 状态 vs 查能力 AbilityTags）
-- **下一课排队**：第三梯队全部完成 ✅。可选：第二梯队余项（WaitAnimNotify 后无）、
-  加餐池（tag 祖先计数 O(1)、首跳立即开关）或新 demo 玩法
+- **里程碑**：25.5 盘点缺口全清 + 加餐池全清——UE GAS 单机版全貌对齐完毕
 - **想法清单**：重叠命中 z 排序、AOE 圈视觉预览、collide_with_areas 开关、
   ge_damage_50.tres 死资产待删
 - 环境备忘：同会话 4

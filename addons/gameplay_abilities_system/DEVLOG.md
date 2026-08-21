@@ -1860,3 +1860,373 @@ cancel 狂暴"的自相矛盾方案——那对关系永远只有一边能成立
 
 狂暴-01~19：激活 ×2 / block 拒绝 / 普攻不误伤 / 移除回落 / 前摇中狂暴打断落雷
 （cancel）/ 打断无伤害 / 3s 到期回落 / 到期后恢复 / 重复狂暴拒绝。
+---
+
+## 25.5 框架完整度盘点（对照 UE GAS，2026-08-14）
+
+第三梯队全部关账后，对照 tranek 文档 4.x 逐项盘点当前框架与 UE GAS 的差距。
+
+### 已实现
+
+| 领域 | 覆盖 |
+|---|---|
+| ASC / AttributeSet / Attribute（base/current/钳制/信号） | ✅ |
+| GameplayTags（层级、O(1) 匹配、容器） | ✅ |
+| GE 三态 + 周期 + granted tag | ✅ |
+| Modifier 四 op 聚合器 + 依赖登记簿实时重算（Derived Attributes 等价） | ✅ |
+| MMC 四类（ScalableFloat/AttributeBased/SetByCaller/Custom） | ✅ |
+| ExecutionCalculation + DoT | ✅ |
+| Stacking 全套（LIMITED/REFRESH/STACK_BY_SOURCE/到期策略/周期计时） | ✅ |
+| Tag 门禁（免疫 ApplicationTagRequirements / 暂停 Ongoing / 驱散） | ✅ |
+| Ability 成本/冷却/激活门禁/打断（cancel_with_tags） | ✅ |
+| Ability 间互斥矩阵（block/cancel abilities with tags） | ✅ |
+| Task 家族（Delay/WaitTargetData/WaitInput/WaitAnimNotify） | ✅ |
+| TargetData / TargetActor（2D） | ✅ |
+| GameplayCue（邮局/小票/凭票制挂载） | ✅ |
+| EffectContext / Spec 快照与实时 | ✅ |
+
+### 明确不做（单机项目）
+
+网络同步、预测（PredictionKey）、Instancing/NetExecution/Replication Policy、
+Animation Montage（用动画通知模拟）。
+
+### 还差的（按单机价值排序）
+
+1. **GE 授予能力（Granted Abilities）**：GE 挂"授予哪些能力"，apply 时 give、
+   remove 时回收（active 能力先 cancel）。目前能力只有 `give_ability` 一条路——
+   "能力从哪来"缺了"装备/状态带技能"这条最常用的路；
+2. **被动能力（Passive）**：授予时自动激活、激活后常驻，生命周期 = GE 生命周期。
+   狂暴（tag 消失驱动结束）已是半被动形态，把"授予即激活"通用化即被动；
+3. **事件驱动激活（GameplayEvent + ActivateByEvent + WaitGameplayEvent）**：
+   能力间通信、携带数据（WaitAnimNotify 是雏形）；
+4. **Source/Target Required/Blocked Tags**：事件触发时查 Source/Target 的 tag；
+5. **Loose Tags**：ASC 手动 add/remove tag（当前只有 GE 授予路径）；
+6. **Custom Application Requirement**：施加条件的 Callable 版（tag 版已做）；
+7. 加餐池：tag 祖先计数 O(1)、首跳立即开关（等需求）。
+
+### 下一步
+
+GE 授予能力 + 被动能力（配套一课：装备/状态带被动技能的标准做法）。
+---
+
+## 26. 复盘：GE 授予能力 + 被动能力（Granted Abilities，2026-08-14 完成）
+
+### 问题本质
+
+"能力从哪来"只有 `give_ability` 一条路——装备/状态带技能的常用路径缺失。
+UE 对照：GE 上挂 `GrantedAbilities`，apply 时 give、remove 时回收；被动能力 =
+授予时立即激活（auto-activate）、常驻、生命周期 = GE 生命周期。
+
+### 框架（用户实现）
+
+- `gameplay_effect.gd` 加 `granted_abilities: Array[GASGameplayAbility]` +
+  `activate_abilities_on_grant: bool`；
+- **引用计数**（tag `_tag_counts` 同款思想）：`_ability_grant_counts` 账本 +
+  `_grant_ability`（首次 give + count=1；已存在 count+1——**先给后记账**，give
+  失败回滚不留污染）+ `_release_ability`（count-1 → 归零才真正移除：cancel +
+  _abilities.erase + disconnect + asc=null）；
+- **entry 凭据**：apply 的 DURATION/INFINITE 分支 entry 加 `granted_abilities`
+  字段（回收起点）；`_cleanup_effect` 末尾逐个 `_release_ability`（唯一漏斗，
+  与 modifiers/tags/依赖清理同处）；
+- **INSTANT fail-closed**：INSTANT + granted_abilities → warn + 拒绝（INSTANT
+  不挂账无回收凭据——"周期 GE 不挂账"同款守卫）。审查揪出三连错：守卫放分支
+  末尾（结算后才拒绝 = 假 fail-closed）/ 只 warn 不 return / 文案抄错 + 误改
+  LIMITED 分支文案——逐条修到"副作用发生前拒绝 + 文案名实相符"；
+- 叠层合并分支（LIMITED/REFRESH 早 return）不重复授予（能力第一次已给）。
+
+### 圣光护符场景（demo 侧，AI 代笔）
+
+护甲槽新装备：佩戴 → `ge_amulet_aura`（INFINITE + granted_abilities=[圣光] +
+auto_activate）→ 授予即激活 → `GAPassiveAura` 激活期间挂 Defense +5 INFINITE GE，
+`end_ability` 自行摘除（狂暴模式）；摘除护符 → GE 移除 → 能力回收 → 被动结束 → 防御回退。
+
+### 踩的坑（新账）
+
+1. **catalog 引用 null 陷阱**：`_gear_catalog` 在 `_load_content` 建，ge_amulet_aura
+   原在 `_spawn_world` 创建——catalog 存的是**创建前的 null 引用**，之后赋值不会
+   更新引用（GDScript 引用语义）→ 装备时 `.ge` 是 null。修：护符 GE 创建挪到
+   catalog 之前（`_load_content` 开头）；
+2. **装备槽存显示名**：`get_gear_name` 返回的是 equip 时传的 name（"圣光护符"），
+   不是 catalog key（"aura_amulet"）——断言写错（测试自证）；
+3. 审查反复：INSTANT 守卫位置/文案三连错（假 fail-closed / 无 return / 假口供）——
+   最终态：分支开头 + return INVALID_HANDLE + 文案自洽。
+
+### 验收记录
+
+| 范围 | 结果 |
+|---|---|
+| topdown 回归（授予 25 条） | 111 → **136/0** |
+| 桌游回归 | 198/0 无回归 |
+| UI 检查 | issues=0 |
+
+授予-01~25：佩戴 +5 / 摘除回退 / 能力授予与回收 / 引用计数对称（无泄漏）/
+被动打断自清理（能力留在 _abilities 直到 GE 移除）/ INSTANT 拒绝无副作用。
+---
+
+## 27. 复盘：事件驱动激活（GameplayEvent，2026-08-14 完成）
+
+### 问题本质
+
+激活入口的第三种：输入键 / 手动调用 / **事件**。UE 对照（tranek 4.6.11）：
+`FGameplayEventData`（Instigator/Target/EventMagnitude...）+ 能力 Triggers 配事件
+tag + `SendGameplayEventToActor`——事件带数据激活能力。**事件只是激活入口，
+不是授予机制**（能力必须已 grant 给 ASC，与 give_ability 分层）。
+
+### 框架（用户实现）
+
+- `GASGameplayEventData`（RefCounted 小票）：instigator / target / event_magnitude
+  （GameplayCue 参数小票同款，快照离手即定）；
+- `gameplay_ability.gd`：`activation_event_tags`（声明响应的事件）+ `last_event_data`
+  （**ASC 激活前注入，不加参数不改 activate 签名**——零破坏现有子类）；
+- ASC：`send_gameplay_event_to_actor(target_asc, tag, data)`（null 守卫 + 转发）→
+  `_on_gameplay_event` 遍历 `_abilities`，`event_tag.matches_tag(evt_tag)` 层级匹配
+  → 注入数据 → `try_activate_ability`（门禁照常：冷却/互斥/is_active）；
+- 审查抓出：类型名拼写 `GasGameplayEventData`（漏 s）+ `last_event_data` 字段缺失
+  ——两处编译级错误；
+- **"没 grant 的能力事件激活不了"是设计**（用户提问点）：事件是激活入口，
+  `_abilities` 是可用池（UE 的 ActivatableAbilities）——与 26 课组合：
+  GE 授予的能力同样能被事件激活（装备带事件响应 = 两课组合拳）。
+
+### 复仇场景（demo 侧，AI 代笔）
+
+玩家受击 → `_apply_damage` 发 `GameplayEvent.Hurt`（携带伤害量）→ 复仇被自动激活
+→ 3s 攻击 ×1.2（buff GE 带 granted tag 可查询/驱散）→ 5s 冷却防连触发。
+
+### 踩的坑（新账）
+
+1. **复仇污染全测试（本课最大）**：复仇装配在 `_spawn_world`（所有 game 实例），
+   玩法/天罚回归里怪物打玩家 → 复仇触发 → Attack ×1.2 → 所有"攻击基准"断言崩
+   （且攻击 42 时骷髅被 70.6 伤害秒杀 → freed 连锁）。这是**游戏性不是 bug，
+   是测试没隔离**。修法：`enable_vengeance` 开关（默认关隔离测试，场景层开真实
+   玩法，事件测试自开）+ 天罚/狂暴测试开头禁用 + 清 buff（buff 配 granted tag
+   可 remove_active_effects_with_tags）；
+2. 复用教训：测试隔离环境机制（enable 开关）比"断言实时值"稳——AI 触发时机
+   不可控，断言必须建立在可控状态上。
+
+### 验收记录
+
+| 范围 | 结果 |
+|---|---|
+| topdown 回归（事件 9 条） | 136 → **145/0** |
+| 桌游回归 | 198/0 无回归 |
+| UI 检查 | issues=0 |
+
+事件-01~09：初始无数据 / 受击注入 / 伤害量匹配 / 攻击 ×1.2 / 冷却 tag /
+CD 内不叠加 / buff 到期回落 / CD 过后再触发 / 数据快照可读。
+---
+
+## 28. 复盘：Loose Tags（手动 tag，2026-08-14 完成）
+
+### 问题本质
+
+tag 只有 GE 授予一条路径（granted_tag）。UE 的 `AddLooseGameplayTag` /
+`RemoveLooseGameplayTag`：手动管理生命周期的 tag——不依赖 GE、即时响应
+（经典用例 `State.Dead`：死亡瞬间挂上，重生手动清）。
+
+### 框架（用户实现）
+
+- ASC 两个**薄壳公开方法**：`add_loose_tag` / `remove_loose_tag`——无效 tag
+  （null / !is_valid）防御后直接复用 `_add_owned_tag` / `_remove_owned_tag`；
+- **教学点：Loose tag 不需要新机制**——就是"手动调用"的 tag 授予路径，
+  与 GE 授予的 tag **混在同一本 `_tag_counts` 账**（引用计数天然正确：
+  GE 授予 + Loose add 同 tag → count 2 → GE 移除 count 1 → Loose 移除归零）。
+  计数、`gameplay_tag_changed` 信号、cancel_with_tags / ongoing requirements
+  门禁联动全自动；
+- remove 不存在的合法 tag 走 `_remove_owned_tag` 的 error 分支——error 是
+  给逻辑错误的证词，薄壳不额外拦（合法对象、账上缺失 = 调用方逻辑错）。
+
+### 死亡场景（demo 侧，AI 代笔）
+
+`_on_player_died` → `add_loose_tag(State.Dead)`（新 tag 入配置）；
+表现层/逻辑层 `has_tag` 即时查询。
+
+### 踩的坑（新账）
+
+1. **lambda 值捕获快照（DEVLOG 22 记过的坑，自己写测试又踩）**：
+   `var count := 0; signal.connect(func(): count += 1)`——count 恒 0（快照）。
+   测试改成员变量 + 命名函数（`_loose_signal_count` + `_on_loose_tag_changed`）。
+   三遍的教训：**回调改状态必须走成员变量/容器，不许 lambda 捕获局部**；
+2. 信号断言时序：计数连接要在 add 之前（先连后发）。
+
+### 验收记录
+
+| 范围 | 结果 |
+|---|---|
+| topdown 回归（Loose 12 条） | 145 → **157/0** |
+| 桌游回归 | 198/0 无回归 |
+| UI 检查 | issues=0 |
+
+Loose-01~12：初始无 / add 命中 / remove 消失 / 信号触发 / GE 授予 /
+混账计数 2 / GE 移除仍在 / 计数 1 / Loose 移除归零 / 无效 tag 防御 /
+死亡自动挂 State.Dead。
+
+---
+
+## 28.5 修复：玩家死亡重复连接报错（2026-08-14）
+
+### 现象
+
+demo2 玩家死亡后按 R 重开，报错：Signal 'health_changed' is already connected to given callable。
+
+### 根因（两条死亡动画路径冲突）
+
+1. 玩家死亡 → health_changed → _on_entity_health_changed 里 if current <= 0.0: _start_death_anim(entity)——**对玩家也调用了怪物死亡路径**；
+2. _tick_death_anim 0.35s 后 _remove_entity_sprite(player)——玩家 sprite 被移除；
+3. 玩家专属死亡动画 _tick_player_death_anim 发现 sprite 丢失 → else: _sync_all_sprites() 重建 → _ensure_entity_sprite 再次 health_changed.connect → **重复连接报错**。
+
+本质：玩家死亡被两条动画路径同时接管，一条移除 sprite、一条重建 sprite，重建时重复 connect。
+
+### 修复
+
+1. **根治**：_on_entity_health_changed 里 _start_death_anim 只对 TopdownMonster 调用（玩家有专属死亡动画路径，不该被怪物路径移除 sprite）；
+2. **防御**：_ensure_entity_sprite 的 connect 加 CONNECT_REFERENCE_COUNTED（Godot 官方防重连接：同一 Callable 可多次连接不报错，断开对称计数）——未来任何"重建 sprite"场景都不会再崩；
+3. **验证**：新增 --death-smoke 冒烟模式（玩家死亡 → 死亡动画期 → 断言 sprite 保持跟踪、无重复连接），157/0 回归全绿。
+
+### 教训
+
+表现层的"死亡"有多条动画路径时，要明确**谁负责移除 sprite**——两条路径一删一建就产生重复连接（同一 bug 的两种表现：重复 connect / 连接泄漏）。---
+
+## 29. 复盘：WaitGameplayEvent Task（事件等待端，2026-08-14 完成）
+
+### 问题本质
+
+27 课做了事件**激活端**（事件到达 → 自动激活能力），本课补**等待端**：
+能力**已激活**后等某个事件带数据。UE 对照（tranek 4.6.11）：`WaitGameplayEvent`
+AbilityTask——能力激活后监听事件，载荷与激活事件相同（FGameplayEventData）。
+同一枚硬币的两面：激活端"事件 → 能力启动"，等待端"能力启动后 → 事件续命"。
+
+### 框架（用户实现）
+
+- **ASC 加广播信号** `gameplay_event_received(event_tag, event_data)`——
+  `_on_gameplay_event` 开头 emit（激活路径 + 等待端并行，谁匹配谁响应）；
+- **`GASAbilityTaskWaitGameplayEvent`**：WaitInput 的 timeout 计时 +
+  WaitAnimNotify 的信号监听两课积木的组合——`create(ability, event_tag, timeout=-1)`
+  （等事件 matches_tag 层级匹配 → 存数据 + end_task(false)；超时 → end_task(true)；
+  `get_event_data()` 交付）；is_running 守卫（非 ONE_SHOT）；queue_free 自动断连；
+- **审查抓出两个错**：① `create` 签名漏 timeout 参数（契约不符 + 超时永不触发 +
+  demo 侧编译错误）；② **`_on_gameplay_event` 里漏了 emit**（只声明信号没广播，
+  等待端永远收不到——测试铁证反击-03 全链挂）。
+
+### 反击场景（demo 侧，AI 代笔）
+
+T 键激活 → 3s 反击姿态（WaitGameplayEvent 等 GameplayEvent.Hurt）→ 受击 →
+对 `event_data.instigator`（攻击者）造成 1.5× 反击伤害 → 结束；超时落空。
+**激活端与等待端共存实证**：同一次 Hurt 事件，复仇（激活端）自动激活 +
+反击（等待端）收到数据——`_on_gameplay_event` 的 emit 先行保证反击伤害
+用激活前的 Attack（35×1.5），复仇 buff 后至不影响。
+
+### 踩的坑（新账）
+
+1. **漏 emit（本课最大）**：信号声明了、Task 连了，中间广播断线——"声明与使用
+   之间的桥忘了架"。测试铁证：事件等待端永远收不到 → 反击-03 全链挂；
+2. **反击秒杀选怪**：51.5 伤害 vs 40hp 哥布林 → 死亡 → freed 崩溃。换血厚怪
+   （兽人 95hp）——复读"多目标组合必须算血量"（天罚同款教训）；
+3. 审查反复：create 签名漏参（契约核对习惯）。
+
+### 验收记录
+
+| 范围 | 结果 |
+|---|---|
+| topdown 回归（反击 8 条） | 157 → **165/0** |
+| 桌游回归 | 198/0 无回归 |
+| UI 检查 | issues=0 |
+
+反击-01~08：激活姿态 / Task 等待中 / 受击反击伤害（攻×1.5−防）/ 反击后结束 /
+再激活 / 姿态中 / 3s 超时落空 / 超时无伤害。
+---
+
+## 30. 复盘：Custom Application Requirement（自定义施加条件，2026-08-14 完成）
+
+### 问题本质
+
+`application_tag_requirements`（tag 版免疫拒收，第 20 节）只能看 tag。
+UE 的 `UGameplayEffectCustomApplicationRequirement`：自定义类重写
+`CanApplyGameplayEffect()`——能做 tag 检查做不到的复杂判断（读属性、看 spec、
+看上下文）。tranek 4.5.13。
+
+### 框架（用户实现）
+
+- `GASCustomApplicationRequirement`（Resource 基类，`can_apply(spec) -> bool`
+  虚函数，默认放行 fail-open）——**完全对齐 `GASExecutionCalculation` 的既有模式**
+  （Resource 基类 + 虚函数 + GE 挂数组，同构零新形状）；
+- GE 加 `custom_application_requirements: Array[GASCustomApplicationRequirement]`；
+- ASC apply 入口：`spec.target_asc = self` 之后检查（can_apply 能读 target——
+  execution"等 apply 时刻"同款道理），任一拒绝 → warn + INVALID_HANDLE
+  （fail-closed 先验后发，与 application_tag_requirements 并列双门禁）。
+
+### 等级条件场景（demo 侧，AI 代笔）
+
+`GASLevelRequirement`（can_apply 读 `spec.target_asc` 的 Level 属性 ≥ min_level）——
+圣光护符配 min_level=2：Lv1 佩戴被拒（无副作用、装备槽不记录），升级 Lv2 成功。
+
+### 踩的坑（新账）
+
+1. **既有测试被新条件破坏**：护符加条件后，授予回归（玩家 Lv1 佩戴）全挂——
+   测试开头升级玩家到 Lv2（条件对既有测试的影响要全局排查，不是只加新测试）；
+2. 编辑事故：插入 CAR 测试时误吃反击回归的注释头（编辑 oldString 边界）。
+
+### 验收记录
+
+| 范围 | 结果 |
+|---|---|
+| topdown 回归（CAR 9 条） | 165 → **174/0** |
+| 桌游回归 | 198/0 无回归 |
+| UI 检查 | issues=0 |
+
+CAR-01~09：Lv1 拒绝 / 无副作用 / 装备槽不记录 / 升级 / Lv2 成功 / 被动生效 /
+摘除正常 / 无条件 GE 不受影响。
+---
+
+## 31. 复盘：加餐池收官——tag 祖先 O(1) + 首跳立即开关（2026-08-14 完成）
+
+### 问题本质
+
+加餐池最后两项（25.5 盘点后仅剩的"等需求"项，用户决定直接做）：
+1. **tag 祖先计数 O(1)**：`matches_tag` 早已 O(1)（parent_tags_chain 哈希），
+   剩余空间是 `has_tag` 遍历持有集合（O(n)）——大项目几百 tag 才有感；
+2. **首跳立即开关**：UE `bExecutePeriodicEffectOnApplication`——周期 GE 施加时
+   立即跳第一次，不等第一个 period。
+
+### 功能 1：tag 祖先 O(1)（用户实现，AI 重复实现后合并）
+
+- **反向祖先索引**（UE `FGameplayTagCountContainer` 同款）：`_tag_ancestor_counts`
+  第二账本——tag 首次出现/真正消失时（`_tag_counts` 0→1 / 1→0），把"自己 + 所有
+  祖先"（parent_tags_chain，深度 ≤5）计数 +1/-1；`has_tag(X)` 变 O(1) 查表；
+- **双写时机**：祖先账本跟随 `_tag_counts` 的 0→1 / 1→0（不是每次 +1），
+  与 `gameplay_tag_changed` 信号同拍；
+- **过程事故**：用户先自己实现了完整版本，AI 又实现了一份（连变量名都一样）→
+  重复声明编译冲突 → 保留用户版删重复声明。教训：**动手前先 git diff 看用户
+  是否已放代码**（"我把代码放过去"的另一面）；
+- 验证：全回归绿 = 重构安检门（行为不变）+ 显式断言（精确/父级命中、索引清空无泄漏）。
+
+### 功能 2：首跳立即开关（AI 实现）
+
+- GE 加 `execute_periodic_effect_on_application`（默认 false，不破坏既有行为）；
+- apply 的 DURATION/INFINITE 分支：entry 入账后立即 `_apply_periodic_effect`
+  （handle 已存在）；`period_timer` 不动（下一跳仍完整周期）；
+- 验证：开→apply 即掉血、下一跳在周期后；关→period 后才跳。
+
+### 测试侧踩坑（新账）
+
+1. **两个周期 GE 共用 dummy 时序污染**：立即跳的 GE 没移除就测延迟跳的——
+   两个 DoT 同时跳，断言基准乱。先移除第一个（记录 handle）再测第二个；
+2. 复用教训：GEModifier 实例被两个 GE 引用（Resource 共享）——测试中只读不改
+   则安全，但依赖"共享不污染"的写法要心里有数。
+
+### 验收记录
+
+| 范围 | 结果 |
+|---|---|
+| topdown 回归（优化 10 条） | 174 → **184/0** |
+| 桌游回归 | 198/0 无回归 |
+| UI 检查 | issues=0 |
+
+优化-01~10：初始无父级 / 精确命中 / 父级命中（O(1)）/ remove 消失 / 父级消失 /
+索引清空 / 立即跳 / 周期后第二跳 / 关闭不掉血 / 关闭周期后跳。
+
+### 加餐池状态
+
+- ✅ tag 祖先计数 O(1)
+- ✅ 首跳立即开关
+- ⏸ SetByCaller key 换 tag（已判画蛇添足，不做）
+- **加餐池全部清空**；25.5 盘点缺口全清；UE GAS 单机版全貌对齐完毕。

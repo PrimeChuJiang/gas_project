@@ -3,6 +3,8 @@ extends Node
 
 signal gameplay_tag_changed(tag: FGameplayTag, added: bool)
 
+signal gameplay_event_received(event_tag: FGameplayTag, event_data: GASGameplayEventData)
+
 const INVALID_HANDLE: int = -1
 
 # ASC的逻辑持有者，例如英雄死后依然存在，属性/等级/装备不丢，此时owner_actor是PlayerState
@@ -12,7 +14,12 @@ var avatar_actor: Node
 # 属性集列表
 var _attribute_sets: Array[GASAttributeSet] = []
 # 带计数的tag容器，结构为{key(FGameplayTag):value(int)}
-var _tag_counts: Dictionary = {}
+var _tag_counts: Dictionary[FGameplayTag, int] = {}
+# 反向祖先索引：持有某 tag 时，它自己和所有祖先的计数 +1；has_tag 查表 O(1)（UE TagMap 同款）
+var _tag_ancestor_counts: Dictionary[FGameplayTag, int] = {}
+# 带计数的Ability容器，结构为{key(GASGameplayAbility):value(int)}
+var _ability_grant_counts: Dictionary[GASGameplayAbility, int] = {}
+
 
 # 效果句柄，自增 ID，唯一标识一个已激活的 GE
 # 用于 GE 到期时精确移除对应的 modifiers 和 granted_tags
@@ -41,11 +48,18 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 		GameLogger.error("GameAbilitySystemComponent", "spec is null!")
 		return INVALID_HANDLE
 	spec.target_asc = self
+	for req in spec.effect_def.custom_application_requirements:
+		if req != null and not req.can_apply(spec):
+			GameLogger.warn("GameAbilitySystemComponent", "ge %s rejected by custom application requirement" % spec.effect_def.resource_path)
+			return INVALID_HANDLE
 	if not spec.effect_def.application_tag_requirements.requirements_met(has_tag):
 		GameLogger.warn("GameAbilitySystemComponent", "ge %s rejected by application tag requirements" % spec.effect_def.resource_path)
 		return INVALID_HANDLE
 	spec.resolve_all()
 	if spec.effect_def.duration_policy == GASEnums.DurationPolicy.INSTANT:
+		if not spec.effect_def.granted_abilities.is_empty():
+			GameLogger.warn("GameAbilitySystemComponent", "ge %s can't get ability because it is INSTANT type" % spec.effect_def.resource_path)
+			return INVALID_HANDLE
 		_apply_effect_modifiers(spec)
 		_run_executions(spec)
 		for attr_set in _attribute_sets:
@@ -54,12 +68,13 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 			var params := _make_cue_parameters(spec)
 			GameplayCueManager.broadcast(tag, GASEnums.GameplayCueEvent.EXECUTED, params)
 		return INVALID_HANDLE
+	# DURATION/INFINITE
 	elif spec.effect_def.duration_policy == GASEnums.DurationPolicy.DURATION or spec.effect_def.duration_policy == GASEnums.DurationPolicy.INFINITE:
 		if spec.effect_def.stack_policy == GASEnums.StackingPolicy.LIMITED:
 			var effect := _find_stack_entry(spec)
 			if not effect.is_empty():
 				if effect.stack_count >= spec.effect_def.stack_limit:
-					GameLogger.warn("GameAbilitySystemComponent", "ge %s stack get limit" % spec.effect_def.resource_path)
+					GameLogger.warn("GameAbilitySystemComponent", "ge %s can't active cause get limit")
 					return INVALID_HANDLE
 				else:
 					effect.stack_count += 1
@@ -110,7 +125,14 @@ func apply_gameplay_effect_spec_to_self(spec: GASEffectSpec) -> int:
 		if not spec.effect_def.executions.is_empty():
 			if spec.period <= 0:
 				GameLogger.warn("GameAbilitySystemComponent", "execution only support \"period > 0\" type, executions ignored")
-		_active_effects.append({"handle": handle, "spec": spec, "remaining_time": spec.duration, "granted_tags": spec.effect_def.granted_tag, "period_timer": spec.period, "stack_count": 1})
+		_active_effects.append({"handle": handle, "spec": spec, "remaining_time": spec.duration, "granted_tags": spec.effect_def.granted_tag, "period_timer": spec.period, "stack_count": 1, "granted_abilities": spec.effect_def.granted_abilities})
+		if spec.period > 0 and spec.effect_def.execute_periodic_effect_on_application:
+			_apply_periodic_effect(_active_effects.back())
+		var activate_flag: bool = spec.effect_def.activate_abilities_on_grant
+		for ability in spec.effect_def.granted_abilities:
+			_grant_ability(ability)
+			if activate_flag:
+				try_activate_ability(ability)
 		for tag in spec.effect_def.gameplay_cue_tags._tags:
 			var params := _make_cue_parameters(spec)
 			GameplayCueManager.broadcast(tag, GASEnums.GameplayCueEvent.ON_ACTIVE, params)
@@ -158,12 +180,10 @@ func add_attribute_set(attr_set: GASAttributeSet) -> void:
 	_attribute_sets.append(attr_set)
 	attr_set.attribute_changed.connect(_on_attribute_changed)
 
-# 层级匹配查询：持有 State.Debuff.Stun 时，查询 State.Debuff 也应命中
+# 层级匹配查询：持有 State.Debuff.Stun 时，查询 State.Debuff 也应命中。
+# O(1)：反向祖先索引（_tag_ancestor_counts）查表，不再遍历持有集合
 func has_tag(tag: FGameplayTag) -> bool:
-	for owned_tag in _tag_counts:
-		if owned_tag.matches_tag(tag):
-			return true
-	return false
+	return _tag_ancestor_counts.has(tag)
 
 func find_attribute_set(attr_name: StringName) -> GASAttributeSet:
 	return _find_attribute_set(attr_name)
@@ -208,6 +228,21 @@ func add_gameplay_cue(tag: FGameplayTag, params: GASGameplayCueParameters) -> in
 
 func remove_gameplay_cue(handle: int) -> bool:
 	return GameplayCueManager.remove_cue(handle)
+
+func send_gameplay_event_to_actor(target_asc: GASAbilitySystemComponent, event_tag: FGameplayTag, event_data: GASGameplayEventData) -> void:
+	if target_asc == null:
+		return
+	target_asc._on_gameplay_event(event_tag, event_data)
+
+func add_loose_tag(tag: FGameplayTag) -> void:
+	if tag == null or not tag.is_valid():
+		return
+	_add_owned_tag(tag)
+
+func remove_loose_tag(tag: FGameplayTag) -> void:
+	if tag == null or not tag.is_valid():
+		return
+	_remove_owned_tag(tag)
 
 func _ready():
 	set_process(true)
@@ -265,7 +300,8 @@ func _cleanup_effect(entry: Dictionary) -> void:
 					deps.remove_at(i)
 			if deps.is_empty():
 				home._attribute_dependencies.erase(dep_attr)
-				
+	for ability in entry.get("granted_abilities", []):
+		_release_ability(ability)
 
 func _apply_effect_modifiers(spec: GASEffectSpec) -> void:
 	var buckets := GASModifierBucket.new()
@@ -315,6 +351,7 @@ func _can_give_ability(ability: GASGameplayAbility) -> bool:
 func _add_owned_tag(tag: FGameplayTag):
 	if not _tag_counts.has(tag):
 		_tag_counts[tag] = 1
+		_bump_ancestor_counts(tag, 1)
 		gameplay_tag_changed.emit(tag, true)
 		_update_ongoing_requirements()
 		_cancel_active_abilities_with_tag(tag)
@@ -328,8 +365,45 @@ func _remove_owned_tag(tag: FGameplayTag):
 	_tag_counts[tag] -= 1
 	if _tag_counts[tag] == 0:
 		_tag_counts.erase(tag)
+		_bump_ancestor_counts(tag, -1)
 		gameplay_tag_changed.emit(tag, false)
 		_update_ongoing_requirements()
+
+## 祖先索引双写：tag 首次出现/真正消失时，把它自己和所有祖先的计数 +1/-1（深度 ≤5）
+func _bump_ancestor_counts(tag: FGameplayTag, delta: int) -> void:
+	var names: Array[StringName] = [tag.get_tag_name()]
+	var node: FGameplayTagNode = GameplayTags._tag_node_map.get(tag.get_tag_name(), null)
+	if node != null:
+		names.append_array(node.parent_tags_chain.keys())
+	for name in names:
+		var ancestor := GameplayTags.request_gameplay_tag(name, false)
+		if ancestor.is_valid():
+			var count: int = _tag_ancestor_counts.get(ancestor, 0) + delta
+			if count <= 0:
+				_tag_ancestor_counts.erase(ancestor)
+			else:
+				_tag_ancestor_counts[ancestor] = count
+
+func _grant_ability(ability: GASGameplayAbility) -> bool:
+	if not _ability_grant_counts.has(ability):
+		if not give_ability(ability):
+			return false
+		_ability_grant_counts[ability] = 1
+	else:
+		_ability_grant_counts[ability] += 1
+	return true
+
+func _release_ability(ability: GASGameplayAbility):
+	if not _ability_grant_counts.has(ability):
+		GameLogger.error("GameAbilitySystemComponent", "remove a nonexistent Ability: " + ability.resource_path)
+		return
+	_ability_grant_counts[ability] -= 1
+	if _ability_grant_counts[ability] == 0:
+		_ability_grant_counts.erase(ability)
+		cancel_ability(ability)
+		_abilities.erase(ability)
+		ability.ability_ended.disconnect(_on_ability_ended)
+		ability.asc = null
 
 func _cancel_active_abilities_with_tag(tag: FGameplayTag):
 	var _active_ability_duplicate: Array[GASGameplayAbility]
@@ -367,6 +441,15 @@ func _run_executions(spec: GASEffectSpec) -> void:
 func _on_attribute_changed(attr_name: StringName, new_value: float, old_value: float) -> void:
 	if _attribute_dependencies.has(attr_name):
 		_recalculate_dependencies(attr_name)
+
+func _on_gameplay_event(event_tag: FGameplayTag, event_data: GASGameplayEventData) -> void:
+	gameplay_event_received.emit(event_tag, event_data)
+	for ability in _abilities:
+		for evt_tag in ability.activation_event_tags._tags:
+			if event_tag.matches_tag(evt_tag):
+				ability.last_event_data = event_data
+				try_activate_ability(ability)
+				break
 
 func _recalculate_dependencies(attr_name: StringName) -> void:
 	if _recalc_stack.has(attr_name):

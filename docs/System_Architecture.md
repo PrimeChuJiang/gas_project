@@ -854,12 +854,12 @@ func _can_give_ability(ability) -> bool:
 | --- | --- | --- |
 | 能力 | `UGameplayAbility` | `GASGameplayAbility` |
 | 能力规格 | `FGameplayAbilitySpec`（Class+Level+InputID...） | **不需要**：`give_ability` 时 `new()` 独立实例，状态直接挂资源实例上 |
-| 激活入口 | `TryActivateAbility` | `try_activate_ability` |
+| 激活入口 | `TryActivateAbility` | `try_activate_ability`（四段式：can → block 检查 → 批量打断 → 入册激活） |
 | 付费/冷却 | `CommitAbility`（Cost GE + Cooldown GE） | `commit_ability`（同构） |
 | 激活门禁 | `CanActivateAbility` | `can_activate` |
-| 打断 | `CancelAbilitiesWithTag` / `BlockAbilitiesWithTag` | `cancel_with_tags` / `activation_blocked_tags` |
+| 打断 | `CancelAbilitiesWithTag` / `BlockAbilitiesWithTag` | `cancel_with_tags` / `activation_blocked_tags` / `block_abilities_with_tags` / `cancel_abilities_with_tags`（互斥矩阵） |
 | 实例化策略 | InstancedPerActor / PerExecution / NonInstanced | 简化：每 `give_ability` 一份实例 |
-| 输入绑定 | AbilityInputID → 输入 Action | 尚未实现（测试用按键直调） |
+| 输入绑定 | AbilityInputID → 输入 Action | 按键直调 `try_activate_ability` + `GASAbilityTaskWaitInput` 窗口等待（连击实战） |
 
 ---
 
@@ -930,9 +930,10 @@ GDScript 不支持泛型，基类无法提供通用的 `static create()` 来 new
 
 ```text
 GASAbilityTask（基类）
-├── GASAbilityTaskDelay        ← 所有"等 N 秒"的技能共用
-├── GASAbilityTask_WaitInput   ← 所有"等按键"的技能共用（规划中）
-└── GASAbilityTask_WaitAnim    ← 所有"等动画帧"的技能共用（规划中）
+├── GASAbilityTaskDelay            ← 所有"等 N 秒"的技能共用
+├── GASAbilityTaskWaitInput        ← 所有"等按键"的技能共用（连击窗口 / 超时）
+├── GASAbilityTaskWaitAnimNotify   ← 所有"等动画帧"的技能共用（动态信号连接 + 名称匹配）
+└── GASAbilityTaskWaitTargetData   ← 所有"等目标选择"的技能共用（注入 TargetActor）
 ```
 
 大部分技能组合已有 Task 就行，跟搭积木一样——这就是 UE 的设计思想：
@@ -1275,10 +1276,10 @@ sequenceDiagram
 | `FGameplayTag` | `FGameplayTag` | RefCounted + 享元池 | 同构（StringName 全局 ID） |
 | `FGameplayTagContainer` | `FGameplayTagContainer` | Resource | 同构 |
 | `FGameplayTagCountContainer` | `_tag_counts` 引用计数 | - | UE 维护祖先计数（本项目遍历） |
-| `FGameplayModifierMagnitude` | `GASModifierMagnitude` 家族 | Resource | 四类少 CustomCalculation 一类 |
-| `UGameplayEffectExecutionCalculation` | `GASExecutionCalculation` | Resource | 捕获声明未做（硬读） |
-| `UGameplayCueManager` | 未实现 | - | `gameplay_cue_tags` 待消费 |
-| `UGameplayAbilityTargetActor` | 未实现 | - | target 目前是写死引用 |
+| `FGameplayModifierMagnitude` | `GASModifierMagnitude` 家族 | Resource | 四类少 CustomCalculation 一类（基类可继承等价） |
+| `UGameplayEffectExecutionCalculation` | `GASExecutionCalculation` | Resource | 捕获声明只做在 modifier 侧（execution 硬读，记入遗留） |
+| `UGameplayCueManager` | `GASGameplayCueManager` | Autoload Node | 邮局广播 + 凭票 Actor Cue |
+| `UGameplayAbilityTargetActor` | `GASAbilityTargetActor` / `_2D` | Node | 点选 / 范围多选 / filter 注入 |
 | 网络预测 / PredictionKey | **明确不做** | - | 单机项目 |
 
 ### 11.2 做了 / 没做 / 故意不做
@@ -1290,11 +1291,15 @@ sequenceDiagram
 - ✅ GE 三种策略 + 周期 DoT + granted_tag + 两道门禁 + Stacking 全家桶
 - ✅ magnitude 家族（ScalableFloat / AttributeBased / SetByCaller / SetByCaller×Attribute）
 - ✅ ExecutionCalculation + 双桶落账 + 依赖登记簿实时重算
-- ✅ Ability 生命周期 + CQS + push/pull 打断 + Task 异步框架
-- ✅ 测试场景 + F 键一键自动化回归
+- ✅ Ability 生命周期 + CQS + push/pull 打断 + 互斥矩阵（block/cancel_abilities_with_tags）
+- ✅ Task 家族（Delay / WaitInput / WaitAnimNotify / WaitTargetData）
+- ✅ GameplayCue（邮局广播 + 凭票 Actor Cue + ASC 三时刻钩子）
+- ✅ TargetData（容器 + TargetActor 基类 + 2D 点选/AOE + WaitTargetData）
+- ✅ 测试场景 + F 键一键自动化回归（桌游 198 / topdown 111）
 
-**规划中**（见第 12 章路线图）：GameplayCue（表现层）、更多 Task、
-TargetData、捕获声明（execution 侧）。
+**机制级缺口**（下一步开发主线，见 `GAS_Documentation.md` 13.4）：
+GE 授予能力、Modifier 级标签条件、Activation Owned Tags、自定义施加条件、
+被动能力钩子、若干小 API 补齐。
 
 **明确不做**：网络复制与客户端预测（单机项目；Godot 网络模型与 UE 差异过大）。
 
@@ -1442,12 +1447,17 @@ godot --headless --path . res://addons/gameplay_abilities_system/test_topdown/To
 
 ```mermaid
 flowchart LR
-    DONE["✅ 已关账：<br/>属性 → GE → Ability → Task<br/>→ MMC → Execution → 聚合器<br/>→ 依赖登记簿 → Stacking"] --> NEXT["下一步梯队"]
-    NEXT --> CUE["GameplayCue<br/>表现层（gameplay_cue_tags 待消费）"]
-    NEXT --> TASK2["更多 Task<br/>WaitInput / WaitAnimNotify"]
-    NEXT --> TARGET["TargetData 目标选择"]
-    NEXT --> TAG2["Tag 驱动 GE 门禁收尾<br/>+ Ability 互斥矩阵"]
+    DONE["✅ 已关账：<br/>属性 → GE → Ability → Task<br/>→ MMC → Execution → 聚合器<br/>→ 依赖登记簿 → Stacking<br/>→ GameplayCue → TargetData<br/>→ 互斥矩阵"] --> NEXT["下一步梯队（机制级缺口）"]
+    NEXT --> GAP1["GE 授予能力<br/>+ Removal Policy"]
+    NEXT --> GAP2["Modifier 级标签条件<br/>SourceTags / TargetTags"]
+    NEXT --> GAP3["Activation Owned Tags"]
+    NEXT --> GAP4["Custom Application Requirement"]
+    NEXT --> GAP5["被动能力钩子<br/>give 即激活"]
+    NEXT --> GAP6["小 API 补齐<br/>冷却剩余 / 批量取消 / GC 静默"]
 ```
+
+> 机制级缺口清单的完整说明见 `GAS_Documentation.md` 13.4；缺口关账后，
+> 再按需推进设定/内容级内容（新能力、新 Task、便利类 GE Containers / Ability Sets）。
 
 ---
 
